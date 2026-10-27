@@ -1,0 +1,200 @@
+// Prisma schema for ErgoCheck AI
+// Multi-tenant SST & Proctoring Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Rol {
+  SUPER_ADMINISTRADOR
+  ADMIN_ORGANIZACION
+  SUPERVISOR
+  EVALUADOR
+  EMPLEADO
+  POSTULANTE
+}
+
+model Usuario {
+  id            String                @id @default(uuid())
+  correo        String                @unique @map("correo")
+  claveHash     String                @map("clave_hash")
+  nombre        String                @map("nombre")
+  apellido      String                @map("apellido")
+  fotoUrl       String?               @map("foto_url")
+  activo        Boolean               @default(true) @map("activo")
+  creadoEn      DateTime              @default(now()) @map("creado_en")
+  actualizadoEn DateTime              @updatedAt @map("actualizado_en")
+
+  membresias      UsuarioOrganizacion[]
+  consentimientos LegalConsent[]
+  sesiones        ErgonomicSession[]
+  registrosAuditoria AuditLog[]
+
+  @@map("usuarios")
+}
+
+model Organizacion {
+  id                   String                @id @default(uuid())
+  nombre               String                @map("nombre")
+  identificacionFiscal String?               @map("identificacion_fiscal")
+  slug                 String                @unique
+  logoUrl              String?               @map("logo_url")
+  activo               Boolean               @default(true) @map("activo")
+  creadoEn             DateTime              @default(now()) @map("creado_en")
+  actualizadoEn        DateTime              @updatedAt @map("actualizado_en")
+
+  departamentos Departamento[]
+  membresias    UsuarioOrganizacion[]
+  suscripciones Subscription[]
+
+  @@map("organizaciones")
+}
+
+model Departamento {
+  id             String                @id @default(uuid())
+  organizacionId String                @map("organizacion_id")
+  nombre         String                @map("nombre")
+  descripcion    String?               @map("descripcion")
+  creadoEn       DateTime              @default(now()) @map("creado_en")
+  actualizadoEn  DateTime              @updatedAt @map("actualizado_en")
+
+  organizacion   Organizacion          @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  membresias     UsuarioOrganizacion[]
+
+  @@map("departamentos")
+}
+
+model UsuarioOrganizacion {
+  id             String        @id @default(uuid())
+  usuarioId      String        @map("usuario_id")
+  organizacionId String        @map("organizacion_id")
+  departamentoId String?       @map("departamento_id")
+  rol            Rol           @default(EMPLEADO)
+  fechaIngreso   DateTime      @default(now()) @map("fecha_ingreso")
+
+  usuario        Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacion   Organizacion  @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  departamento   Departamento? @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
+
+  @@unique([usuarioId, organizacionId])
+  @@map("usuarios_organizaciones")
+}
+
+enum ConsentType {
+  CAMERA_AND_BIOMETRICS
+  TELEMETRY_AND_ACTIVITY
+  TERMS_AND_PRIVACY
+}
+
+model LegalConsent {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  type       ConsentType
+  version    String      @default("1.0")
+  isAccepted Boolean     @default(false) @map("is_accepted")
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  acceptedAt DateTime?   @map("accepted_at")
+  revokedAt  DateTime?   @map("revoked_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  usuario    Usuario     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, isAccepted])
+  @@map("legal_consents")
+}
+
+enum PlanType {
+  SAAS_SEAT_MONTHLY
+  PAY_PER_EXAM_PACKAGE
+  ENTERPRISE_CUSTOM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  TRIAL
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  organizationId     String             @map("organization_id")
+  planType           PlanType           @map("plan_type")
+  status             SubscriptionStatus @default(TRIAL)
+  seatsAllocated     Int                @default(5) @map("seats_allocated")
+  examsAllocated     Int                @default(0) @map("exams_allocated")
+  examsUsed          Int                @default(0) @map("exams_used")
+  currentPeriodStart DateTime           @map("current_period_start")
+  currentPeriodEnd   DateTime           @map("current_period_end")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organizacion       Organizacion       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices           Invoice[]
+
+  @@map("subscriptions")
+}
+
+enum InvoiceStatus {
+  PAID
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  subscriptionId  String        @map("subscription_id")
+  invoiceNumber   String        @unique @map("invoice_number")
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("USD")
+  status          InvoiceStatus @default(PENDING)
+  paymentProvider String?       @map("payment_provider")
+  transactionId   String?       @unique @map("transaction_id")
+  receiptUrl      String?       @map("receipt_url")
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  subscription    Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+// Hook de estructura previa para Sprint 2
+model ErgonomicSession {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  startTime   DateTime  @default(now()) @map("start_time")
+  endTime     DateTime? @map("end_time")
+  averageRula Float?    @map("average_rula")
+  totalAlerts Int       @default(0) @map("total_alerts")
+
+  usuario     Usuario   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ergonomic_sessions")
+}
+
+// Hook de estructura previa para Sprint 4
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  categoria String   @default("SEGURIDAD")
+  ipAddress String?  @map("ip_address")
+  details   Json?
+  timestamp DateTime @default(now())
+
+  usuario   Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}

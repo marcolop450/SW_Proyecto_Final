@@ -1,0 +1,21 @@
+# Reglas de Arquitectura y Estándares de Ingeniería — ErgoCheck AI
+
+- **Modularidad:** Máximo 250 líneas por archivo (`.ts`, `.tsx`, `.css`). Cero monolitos.
+- **Anti-AISLOP:** Cero comentarios obvios o triviales de IA. Código auto-documentado y conciso.
+- **Frontend Impeccable:**
+  - Sin "cuadros dentro de cuadros" (usar fondos contrastantes sutiles en lugar de bordes anidados).
+  - 100% responsivo sin overflow horizontal.
+  - Uso estricto de iconos vectoriales (`lucide-react`); prohibido el uso de emojis en la UI.
+  - Cero meta-contexto en pantallas (prohibido "CUxx", "Sprint", "UAGRM", "Facultad"). Look & Feel comercial B2B.
+  - Tokens: `#0B1020`, `#C6F432`, `emerald-500`, `rose-500`.
+  - Code-splitting con `React.lazy()` y `Suspense`.
+- **Manejo de Errores Unificado:**
+  - Formato JSON unificado: `statusCode`, `errorCode`, `message`, `errorReference`, `timestamp`.
+  - `errorReference` única generada en backend para trazabilidad en logs.
+  - Mensajes amigables para el usuario final en frontend.
+- **Seguridad DevSecOps:**
+  - `JwtAuthGuard` con firma real en Passport JWT. Prohibido decode manual de Base64.
+  - Contraseñas con `bcryptjs` (salt 12).
+  - Multi-tenancy estricto: `where: { organizationId: req.user.organizationId }`.
+  - `ConsentGuard` para bloquear accesos no autorizados a cámara y telemetría.
+- **Web Workers:** Inferencia neuronal siempre fuera del hilo principal de React.
