@@ -12,7 +12,7 @@ export const BarraNavegacion: React.FC<Props> = ({ alAbrirMovil }) => {
   const esSuperAdmin = usuario?.rol === 'SUPER_ADMINISTRADOR';
 
   return (
-    <header className="h-16 bg-white/80 border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between backdrop-blur-md sticky top-0 z-30 shrink-0">
+    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 z-10">
       <div className="flex items-center gap-3">
         {alAbrirMovil ? (
           <button

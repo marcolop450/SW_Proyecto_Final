@@ -29,15 +29,17 @@ export const PlantillaPrivada: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen w-screen overflow-x-hidden bg-[#F8FAFC] bg-dot-grid bg-ambient-mesh text-slate-800">
+    <div className="flex h-screen w-full overflow-hidden bg-[#F8FAFC] bg-dot-grid bg-ambient-mesh text-slate-800">
       <BarraLateral
         abiertoEnMovil={menuMovilAbierto}
         alCerrarMovil={() => setMenuMovilAbierto(false)}
       />
-      <div className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         <BarraNavegacion alAbrirMovil={() => setMenuMovilAbierto(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl w-full mx-auto space-y-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

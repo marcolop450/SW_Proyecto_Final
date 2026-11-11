@@ -78,7 +78,7 @@ export const BarraLateral: React.FC<Props> = ({ abiertoEnMovil, alCerrarMovil })
   );
 
   const contenido = (
-    <div className="flex flex-col justify-between h-full p-4 select-none">
+    <div className="flex flex-col justify-between h-full p-4 select-none overflow-y-auto">
       <div className="space-y-6">
         {/* Marca Oficial B2B */}
         <div className="flex items-center justify-between px-2 py-1">
@@ -130,7 +130,7 @@ export const BarraLateral: React.FC<Props> = ({ abiertoEnMovil, alCerrarMovil })
       </div>
 
       {/* Perfil Inferior y Cierre de Sesión */}
-      <div className="pt-4 border-t border-slate-200/80 space-y-3">
+      <div className="pt-4 border-t border-slate-200/80 space-y-3 mt-auto shrink-0">
         <div className="px-2">
           <p className="text-xs font-bold text-slate-800 truncate">
             {usuario?.nombre} {usuario?.apellido}
@@ -157,7 +157,7 @@ export const BarraLateral: React.FC<Props> = ({ abiertoEnMovil, alCerrarMovil })
   return (
     <>
       {/* Barra de escritorio */}
-      <aside className="hidden lg:flex flex-col w-64 bg-white/80 border-r border-slate-200/80 backdrop-blur-md h-screen sticky top-0 shrink-0">
+      <aside className="hidden lg:flex flex-col w-64 h-full bg-white border-r border-slate-200/80 shrink-0 z-20">
         {contenido}
       </aside>
 
