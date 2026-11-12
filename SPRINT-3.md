@@ -1,6 +1,7 @@
 # Sprint 3 — Supervisión de conducta, anti-cheat, cuestionarios y entrevistas
 
-**Semanas:** 8–10 · **Puntos:** 59 (el más cargado) · **Casos de uso:** CU11–CU19 · **Módulos:** 5 (Supervisión ocular), 6 (Telemetría digital), 7 (Evaluación psicotécnica)
+**Estado:** 100% Completado y Verificado en QA  
+**Semanas:** 8–10 · **Puntos:** 59 · **Casos de uso:** CU11–CU19 · **Módulos:** 5 (Supervisión ocular), 6 (Telemetría digital), 7 (Evaluación psicotécnica)  
 **PO / SM:** Integrante 4 / Integrante 5 *(rotación propuesta)*
 
 ## Objetivo

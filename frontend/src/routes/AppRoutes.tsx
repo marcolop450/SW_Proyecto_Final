@@ -28,6 +28,12 @@ const PaginaPortalPostulante = lazy(() =>
 const PaginaMiErgonomia = lazy(() =>
   import('../features/ergonomia/PaginaMiErgonomia').then((m) => ({ default: m.PaginaMiErgonomia }))
 );
+const PanelGestionCuestionarios = lazy(() =>
+  import('../features/supervision/components/PanelGestionCuestionarios').then((m) => ({ default: m.PanelGestionCuestionarios }))
+);
+const ConsolaTeletrabajo = lazy(() =>
+  import('../features/supervision/components/ConsolaTeletrabajo').then((m) => ({ default: m.ConsolaTeletrabajo }))
+);
 
 const RedireccionRaiz: React.FC = () => {
   const { usuario } = useAuth();
@@ -66,11 +72,13 @@ export const AppRoutes: React.FC = () => {
           {/* Portal Empleado */}
           <Route element={<RutaProtegidaPorRol rolesPermitidos={rolesEmpleado} />}>
             <Route path="/mi-ergonomia" element={<PaginaMiErgonomia />} />
+            <Route path="/teletrabajo" element={<ConsolaTeletrabajo />} />
           </Route>
 
-          {/* Panel Supervisión SST y Dashboard */}
+          {/* Panel Supervisión SST, Dashboard y Cuestionarios */}
           <Route element={<RutaProtegidaPorRol rolesPermitidos={rolesSst} />}>
             <Route path="/dashboard" element={<PaginaDashboard />} />
+            <Route path="/cuestionarios" element={<PanelGestionCuestionarios />} />
           </Route>
 
           {/* Módulos Administrativos de Tenant */}

@@ -9,6 +9,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { ConsentimientoModule } from './modules/consentimiento/consentimiento.module';
 import { SuscripcionesModule } from './modules/suscripciones/suscripciones.module';
 import { ErgonomiaModule } from './modules/ergonomia/ergonomia.module';
+import { SupervisionModule } from './modules/supervision/supervision.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -23,6 +24,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     ConsentimientoModule,
     SuscripcionesModule,
     ErgonomiaModule,
+    SupervisionModule,
   ],
   controllers: [AppController],
   providers: [

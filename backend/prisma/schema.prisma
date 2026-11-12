@@ -31,10 +31,11 @@ model Usuario {
   creadoEn      DateTime              @default(now()) @map("creado_en")
   actualizadoEn DateTime              @updatedAt @map("actualizado_en")
 
-  membresias      UsuarioOrganizacion[]
-  consentimientos LegalConsent[]
-  sesiones        ErgonomicSession[]
-  registrosAuditoria AuditLog[]
+  membresias          UsuarioOrganizacion[]
+  consentimientos     LegalConsent[]
+  sesiones            ErgonomicSession[]
+  sesionesSupervision SupervisionSession[]
+  registrosAuditoria  AuditLog[]
 
   @@map("usuarios")
 }
@@ -49,9 +50,11 @@ model Organizacion {
   creadoEn             DateTime              @default(now()) @map("creado_en")
   actualizadoEn        DateTime              @updatedAt @map("actualizado_en")
 
-  departamentos Departamento[]
-  membresias    UsuarioOrganizacion[]
-  suscripciones Subscription[]
+  departamentos       Departamento[]
+  membresias          UsuarioOrganizacion[]
+  suscripciones       Subscription[]
+  questionnaires      Questionnaire[]
+  sesionesSupervision SupervisionSession[]
 
   @@map("organizaciones")
 }
@@ -197,4 +200,101 @@ model AuditLog {
   usuario   Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
+}
+
+// Sprint 3: Supervisión de Conducta, Anti-Cheat, Exámenes y Entrevistas
+model Questionnaire {
+  id              String                @id @default(uuid())
+  organizationId  String                @map("organization_id")
+  creadorId       String                @map("creador_id")
+  titulo          String                @map("titulo")
+  descripcion     String?               @map("descripcion")
+  tipo            String                @default("EXAMEN") @map("tipo")
+  urlExterna      String                @map("url_externa")
+  duracionMinutos Int                   @default(60) @map("duracion_minutos")
+  codigoAcceso    String                @unique @map("codigo_acceso")
+  expiraEn        DateTime              @map("expira_en")
+  activo          Boolean               @default(true) @map("activo")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  organizacion     Organizacion         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sesiones         SupervisionSession[]
+  preguntasControl ControlQuestion[]
+
+  @@map("questionnaires")
+}
+
+model SupervisionSession {
+  id                  String                    @id @default(uuid())
+  userId              String                    @map("user_id")
+  organizationId      String                    @map("organization_id")
+  questionnaireId     String?                   @map("questionnaire_id")
+  tipo                String                    @default("EXAMEN") @map("tipo")
+  estado              String                    @default("EN_PROGRESO") @map("estado")
+  inicio              DateTime                  @default(now()) @map("inicio")
+  fin                 DateTime?                 @map("fin")
+  scoreIntegridad     Float?                    @map("score_integridad")
+  totalIncidentes     Int                       @default(0) @map("total_incidentes")
+  tiempoActivoSeg     Int                       @default(0) @map("tiempo_activo_seg")
+  tiempoOciosoSeg     Int                       @default(0) @map("tiempo_ocioso_seg")
+  tiempoFueraSeg      Int                       @default(0) @map("tiempo_fuera_seg")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+
+  usuario             Usuario                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizacion        Organizacion              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  questionnaire       Questionnaire?            @relation(fields: [questionnaireId], references: [id], onDelete: SetNull)
+  eventosConducta     BehaviorEvent[]
+  respuestasControl   ControlQuestionResponse[]
+
+  @@map("supervision_sessions")
+}
+
+model BehaviorEvent {
+  id         String             @id @default(uuid())
+  sessionId  String             @map("session_id")
+  userId     String             @map("user_id")
+  tipo       String             @map("tipo")
+  severidad  String             @default("LOW") @map("severidad")
+  duracionMs Int?               @map("duracion_ms")
+  detalles   Json?              @map("detalles")
+  timestamp  DateTime           @default(now()) @map("timestamp")
+
+  session    SupervisionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, tipo])
+  @@map("behavior_events")
+}
+
+model ControlQuestion {
+  id              String                    @id @default(uuid())
+  questionnaireId String?                   @map("questionnaire_id")
+  pregunta        String                    @map("pregunta")
+  categoria       String                    @default("INTEGRIDAD") @map("categoria")
+  orden           Int                       @default(1) @map("orden")
+  tiempoEsperaSeg Int                       @default(5) @map("tiempo_espera_seg")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  questionnaire   Questionnaire?            @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  respuestas      ControlQuestionResponse[]
+
+  @@map("control_questions")
+}
+
+model ControlQuestionResponse {
+  id                  String             @id @default(uuid())
+  sessionId           String             @map("session_id")
+  preguntaId          String             @map("pregunta_id")
+  evaluadorId         String?            @map("evaluador_id")
+  disparadaEn         DateTime           @default(now()) @map("disparada_en")
+  latenciaRespuestaMs Int?               @map("latencia_respuesta_ms")
+  deltaTensionFacial  Float?             @map("delta_tension_facial")
+  detallesBiometricos Json?              @map("detalles_biometricos")
+  notasEvaluador      String?            @map("notas_evaluador")
+
+  session             SupervisionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  pregunta            ControlQuestion    @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+
+  @@map("control_question_responses")
 }
