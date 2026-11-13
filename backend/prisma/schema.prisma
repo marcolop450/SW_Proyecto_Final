@@ -185,19 +185,21 @@ model ErgonomicSession {
   @@map("ergonomic_sessions")
 }
 
-// Hook de estructura previa para Sprint 4
+// Sprint 4: Bitácora Inmutable WORM con Encadenamiento Criptográfico SHA-256
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?  @map("user_id")
-  action    String
-  entity    String
-  entityId  String?  @map("entity_id")
-  categoria String   @default("SEGURIDAD")
-  ipAddress String?  @map("ip_address")
-  details   Json?
-  timestamp DateTime @default(now())
+  id            String    @id @default(uuid())
+  userId        String?   @map("user_id")
+  action        String
+  entity        String
+  entityId      String?   @map("entity_id")
+  categoria     String    @default("SEGURIDAD")
+  ipAddress     String?   @map("ip_address")
+  details       Json?
+  prevHash      String?   @map("prev_hash")
+  hash          String?   @map("hash")
+  timestamp     DateTime  @default(now())
 
-  usuario   Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  usuario       Usuario?  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
 }
@@ -247,6 +249,7 @@ model SupervisionSession {
   questionnaire       Questionnaire?            @relation(fields: [questionnaireId], references: [id], onDelete: SetNull)
   eventosConducta     BehaviorEvent[]
   respuestasControl   ControlQuestionResponse[]
+  incidentes          Incident[]
 
   @@map("supervision_sessions")
 }
@@ -297,4 +300,24 @@ model ControlQuestionResponse {
   pregunta            ControlQuestion    @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
 
   @@map("control_question_responses")
+}
+
+// Sprint 4: Incidentes Correlacionados por Reglas Declarativas
+model Incident {
+  id            String             @id @default(uuid())
+  sessionId     String             @map("session_id")
+  tipo          String             @map("tipo")
+  severidad     String             @default("MEDIUM") @map("severidad") // LOW | MEDIUM | HIGH | CRITICAL
+  estado        String             @default("PENDIENTE") @map("estado") // PENDIENTE | CONFIRMADO | DESESTIMADO | FALSO_POSITIVO
+  resumen       String             @map("resumen")
+  signals       Json               @map("signals")
+  timestamp     DateTime           @default(now()) @map("timestamp")
+  auditorId     String?            @map("auditor_id")
+  auditadoEn    DateTime?          @map("auditado_en")
+  justificacion String?            @map("justificacion")
+
+  session       SupervisionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, estado])
+  @@map("incidents")
 }

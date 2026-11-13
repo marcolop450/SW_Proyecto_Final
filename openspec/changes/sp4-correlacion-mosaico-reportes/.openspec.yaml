@@ -1,0 +1,14 @@
+id: sp4-correlacion-mosaico-reportes
+title: "Sprint 4: Motor de Correlación, Mosaico WSS, Auditoría e Informes Forenses"
+status: completed
+created: 2026-11-13
+author: Antigravity AI & Equipo ErgoCheck
+sprint: 4
+use_cases:
+  - CU20
+  - CU21
+  - CU22
+  - CU23
+  - CU24
+  - CU25
+  - CU26
