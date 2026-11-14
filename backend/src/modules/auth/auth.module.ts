@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { obtenerSecretoJwt } from './jwt-config';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'ergocheck-ai-secure-jwt-secret-key-2026-uagrm'),
+        secret: obtenerSecretoJwt(config),
         signOptions: {
           expiresIn: config.get<string>('JWT_EXPIRES_IN', '7d'),
         },

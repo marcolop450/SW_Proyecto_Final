@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { UsuariosService } from './usuarios.service';
 import { InvitarUsuarioDto } from './dto/invitar-usuario.dto';
+import { CambiarRolDto } from './dto/cambiar-rol.dto';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Rol } from '@prisma/client';
@@ -36,8 +37,8 @@ export class UsuariosController {
   async cambiarRol(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') usuarioId: string,
-    @Body('rol') nuevoRol: Rol,
+    @Body() dto: CambiarRolDto,
   ) {
-    return this.usuariosService.cambiarRol(user.organizationId, usuarioId, nuevoRol);
+    return this.usuariosService.cambiarRol(user.organizationId, usuarioId, dto.rol);
   }
 }

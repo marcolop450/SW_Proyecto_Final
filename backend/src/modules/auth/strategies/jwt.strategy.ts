@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { obtenerSecretoJwt } from '../jwt-config';
 
 export interface JwtPayload {
   sub: string;
@@ -14,51 +15,48 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private readonly configService: ConfigService,
+    configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'ergocheck-ai-secure-jwt-secret-key-2026-uagrm'),
+      secretOrKey: obtenerSecretoJwt(configService),
     });
   }
 
   async validate(payload: JwtPayload) {
-    const usuario = await this.prisma.usuario.findUnique({
-      where: { id: payload.sub },
-      include: {
-        membresias: {
-          include: {
-            organizacion: true,
-            departamento: true,
+    const membresia = payload.sub && payload.organizationId
+      ? await this.prisma.usuarioOrganizacion.findFirst({
+          where: {
+            usuarioId: payload.sub,
+            organizacionId: payload.organizationId,
+            usuario: { activo: true },
+            organizacion: { activo: true },
           },
-        },
-      },
-    });
+          include: { usuario: true, organizacion: true, departamento: true },
+        })
+      : null;
 
-    if (!usuario || !usuario.activo) {
+    if (!membresia) {
       throw new UnauthorizedException({
         errorCode: 'ERR_INVALID_SESSION',
-        message: 'La sesión no es válida o el usuario ha sido deshabilitado.',
+        message: 'La sesión no es válida. Por favor inicia sesión nuevamente.',
       });
     }
 
-    const membresiaActiva =
-      usuario.membresias.find((m) => m.organizacionId === payload.organizationId) ||
-      usuario.membresias[0];
-
+    const { usuario, organizacion, departamento } = membresia;
     return {
       id: usuario.id,
       correo: usuario.correo,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       fotoUrl: usuario.fotoUrl,
-      rol: membresiaActiva?.rol || 'EMPLEADO',
-      organizationId: membresiaActiva?.organizacionId || '',
-      organizationName: membresiaActiva?.organizacion?.nombre || 'Organización',
-      departamentoId: membresiaActiva?.departamentoId || null,
-      departamentoNombre: membresiaActiva?.departamento?.nombre || null,
+      rol: membresia.rol,
+      organizationId: membresia.organizacionId,
+      organizationName: organizacion.nombre,
+      departamentoId: membresia.departamentoId,
+      departamentoNombre: departamento?.nombre ?? null,
     };
   }
 }

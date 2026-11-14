@@ -9,7 +9,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegistroDto } from './dto/registro.dto';
-import { Rol } from '@prisma/client';
+import { Prisma, Rol } from '@prisma/client';
 
 export interface AuthResponse {
   token: string;
@@ -42,6 +42,8 @@ export class AuthService {
       where: { correo: correoNormalizado },
       include: {
         membresias: {
+          where: { organizacion: { activo: true } },
+          orderBy: [{ fechaIngreso: 'asc' }, { id: 'asc' }],
           include: {
             organizacion: true,
             departamento: true,
@@ -66,9 +68,14 @@ export class AuthService {
     }
 
     const membresiaPrincipal = usuario.membresias[0];
-    const rol = membresiaPrincipal?.rol || Rol.EMPLEADO;
-    const organizationId = membresiaPrincipal?.organizacionId || '';
-    const organizationName = membresiaPrincipal?.organizacion?.nombre || 'Visitask Org';
+    if (!membresiaPrincipal) {
+      throw new UnauthorizedException({
+        errorCode: 'ERR_INVALID_SESSION',
+        message: 'Tu cuenta no tiene una membresía en una organización activa.',
+      });
+    }
+
+    const { rol, organizacionId: organizationId, organizacion, departamento } = membresiaPrincipal;
 
     const payload = {
       sub: usuario.id,
@@ -90,9 +97,9 @@ export class AuthService {
         apellido: usuario.apellido,
         rol,
         organizationId,
-        organizationName,
-        departamentoId: membresiaPrincipal?.departamentoId || null,
-        departamentoNombre: membresiaPrincipal?.departamento?.nombre || null,
+        organizationName: organizacion.nombre,
+        departamentoId: membresiaPrincipal.departamentoId,
+        departamentoNombre: departamento?.nombre ?? null,
       },
     };
   }
@@ -100,32 +107,11 @@ export class AuthService {
   async registrar(dto: RegistroDto): Promise<AuthResponse> {
     const correoNormalizado = dto.correo.trim().toLowerCase();
 
-    const existente = await this.prisma.usuario.findUnique({
-      where: { correo: correoNormalizado },
-    });
-
-    if (existente) {
-      throw new ConflictException({
-        errorCode: 'ERR_DUPLICATE_EMAIL',
-        message: 'Ya existe una cuenta registrada con este correo electrónico.',
-      });
-    }
-
     const claveHash = await bcrypt.hash(dto.clave, 12);
     const nombreOrg = dto.organizacionNombre?.trim() || `${dto.nombre} Enterprise`;
     const slug = nombreOrg.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     const resultado = await this.prisma.$transaction(async (tx) => {
-      let organizacion = await tx.organizacion.findUnique({ where: { slug } });
-      if (!organizacion) {
-        organizacion = await tx.organizacion.create({
-          data: {
-            nombre: nombreOrg,
-            slug,
-          },
-        });
-      }
-
       const usuario = await tx.usuario.create({
         data: {
           correo: correoNormalizado,
@@ -133,6 +119,10 @@ export class AuthService {
           nombre: dto.nombre,
           apellido: dto.apellido,
         },
+      });
+
+      const organizacion = await tx.organizacion.create({
+        data: { nombre: nombreOrg, slug },
       });
 
       await tx.usuarioOrganizacion.create({
@@ -144,6 +134,23 @@ export class AuthService {
       });
 
       return { usuario, organizacion };
+    }).catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const campos = error.meta?.target;
+        if (Array.isArray(campos) && campos.includes('slug')) {
+          throw new ConflictException({
+            errorCode: 'ERR_ORGANIZATION_SLUG_TAKEN',
+            message: 'Ya existe una organización con ese nombre. Elige otro nombre o solicita una invitación.',
+          });
+        }
+        if (Array.isArray(campos) && campos.includes('correo')) {
+          throw new ConflictException({
+            errorCode: 'ERR_DUPLICATE_EMAIL',
+            message: 'Ya existe una cuenta registrada con este correo electrónico.',
+          });
+        }
+      }
+      throw error;
     });
 
     const payload = {

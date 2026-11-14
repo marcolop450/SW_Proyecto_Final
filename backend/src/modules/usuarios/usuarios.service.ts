@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvitarUsuarioDto } from './dto/invitar-usuario.dto';
-import { Rol } from '@prisma/client';
+import { Prisma, Rol } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -45,79 +45,112 @@ export class UsuariosService {
   }
 
   async invitarUsuario(organizationId: string, dto: InvitarUsuarioDto) {
+    this.validarRolAdministrable(dto.rol);
     const correoNormalizado = dto.correo.trim().toLowerCase();
 
-    // Comprobar si ya existe membresía en esta organización
+    if (dto.departamentoId) {
+      const departamento = await this.prisma.departamento.findFirst({
+        where: { id: dto.departamentoId, organizacionId: organizationId },
+        select: { id: true },
+      });
+      if (!departamento) {
+        throw new NotFoundException({
+          errorCode: 'ERR_DEPARTMENT_NOT_FOUND',
+          message: 'El departamento no pertenece a tu organización.',
+        });
+      }
+    }
+
     const usuarioExistente = await this.prisma.usuario.findUnique({
       where: { correo: correoNormalizado },
-      include: {
+      select: {
         membresias: {
           where: { organizacionId: organizationId },
+          select: { rol: true },
         },
       },
     });
 
     if (usuarioExistente && usuarioExistente.membresias.length > 0) {
+      this.validarRolAdministrable(usuarioExistente.membresias[0].rol);
       throw new ConflictException({
         errorCode: 'ERR_USER_ALREADY_IN_ORG',
         message: 'Este usuario ya es miembro activo de tu organización.',
       });
     }
 
-    let usuarioId = usuarioExistente?.id;
+    const usuario = usuarioExistente
+      ? { connect: { correo: correoNormalizado } }
+      : {
+          create: {
+            correo: correoNormalizado,
+            claveHash: await bcrypt.hash('Temporal123!', 12),
+            nombre: dto.nombre,
+            apellido: dto.apellido,
+          },
+        };
 
-    if (!usuarioId) {
-      const claveProvisoria = await bcrypt.hash('Temporal123!', 12);
-      const nuevoUsuario = await this.prisma.usuario.create({
+    try {
+      return await this.prisma.usuarioOrganizacion.create({
         data: {
-          correo: correoNormalizado,
-          claveHash: claveProvisoria,
-          nombre: dto.nombre,
-          apellido: dto.apellido,
+          usuario,
+          organizacion: { connect: { id: organizationId } },
+          departamento: dto.departamentoId
+            ? { connect: { id: dto.departamentoId, organizacionId: organizationId } }
+            : undefined,
+          rol: dto.rol,
+        },
+        include: {
+          usuario: { select: { id: true, correo: true, nombre: true, apellido: true } },
+          departamento: { select: { id: true, nombre: true } },
         },
       });
-      usuarioId = nuevoUsuario.id;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException({
+          errorCode: 'ERR_INVITATION_CONFLICT',
+          message: 'Se registró una cuenta o invitación con este correo durante la operación.',
+        });
+      }
+      throw error;
     }
-
-    return this.prisma.usuarioOrganizacion.create({
-      data: {
-        usuarioId,
-        organizacionId: organizationId,
-        departamentoId: dto.departamentoId || null,
-        rol: dto.rol,
-      },
-      include: {
-        usuario: true,
-        departamento: true,
-      },
-    });
   }
 
   async cambiarRol(organizationId: string, usuarioId: string, nuevoRol: Rol) {
-    const membresia = await this.prisma.usuarioOrganizacion.findUnique({
-      where: {
-        usuarioId_organizacionId: {
-          usuarioId,
-          organizacionId: organizationId,
-        },
-      },
-    });
+    this.validarRolAdministrable(nuevoRol);
+    const where = {
+      usuarioId_organizacionId: { usuarioId, organizacionId: organizationId },
+    };
 
-    if (!membresia) {
+    try {
+      return await this.prisma.usuarioOrganizacion.update({
+        where: { ...where, rol: { not: Rol.SUPER_ADMINISTRADOR } },
+        data: { rol: nuevoRol },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2025') {
+        throw error;
+      }
+      const membresia = await this.prisma.usuarioOrganizacion.findUnique({
+        where,
+        select: { rol: true },
+      });
+      if (membresia) {
+        this.validarRolAdministrable(membresia.rol);
+      }
       throw new NotFoundException({
         errorCode: 'ERR_USER_NOT_FOUND',
         message: 'El usuario no pertenece a tu organización.',
       });
     }
+  }
 
-    return this.prisma.usuarioOrganizacion.update({
-      where: {
-        usuarioId_organizacionId: {
-          usuarioId,
-          organizacionId: organizationId,
-        },
-      },
-      data: { rol: nuevoRol },
-    });
+  private validarRolAdministrable(rol: Rol) {
+    if (rol === Rol.SUPER_ADMINISTRADOR) {
+      throw new ForbiddenException({
+        errorCode: 'ERR_PLATFORM_ROLE_PROTECTED',
+        message: 'El rol de superadministrador se gestiona desde la plataforma.',
+      });
+    }
   }
 }
