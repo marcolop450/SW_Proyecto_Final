@@ -1,391 +1,89 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import {
-  FileSpreadsheet,
-  FileText,
-  Download,
-  ShieldCheck,
-  CheckCircle2,
-  Search,
-  RefreshCw,
-  User,
-  Clock,
-  Layers,
-  Sparkles,
-  ArrowRight,
-  Activity,
-  Award,
-} from 'lucide-react';
+import { FileSpreadsheet, FileText, Download, RefreshCw, ArrowLeft, Check } from 'lucide-react';
 import { api } from '../../api/client';
+import { SelectorSesiones, SesionSeleccionable } from '../../features/supervision/components/SelectorSesiones';
 
-interface SesionReporte {
-  id: string;
-  tipo: string;
-  estado: string;
-  inicio: string;
-  fin?: string;
-  scoreIntegridad?: number;
-  usuario?: {
-    nombre: string;
-    apellido: string;
-    correo: string;
-  };
-  _count?: {
-    eventosConducta: number;
-    incidentes: number;
-  };
+interface SesionReporte extends SesionSeleccionable {
+  fin?: string | null;
+  scoreIntegridad?: number | null;
 }
 
+const OpcionReporte: React.FC<{ titulo: string; descripcion: string; valor: boolean; alCambiar: (valor: boolean) => void }> = ({ titulo, descripcion, valor, alCambiar }) => (
+  <label className={`group flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${valor ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
+    <span className="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+      <input type="checkbox" checked={valor} onChange={e => alCambiar(e.target.checked)} className="peer absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-md border border-slate-400 bg-white transition-colors checked:border-emerald-700 checked:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600" />
+      <Check aria-hidden="true" className="pointer-events-none relative h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100" strokeWidth={3} />
+    </span>
+    <span><span className="block text-sm font-semibold text-slate-800">{titulo}</span><span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{descripcion}</span></span>
+  </label>
+);
+
 export const PaginaReportes: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const [sesiones, setSesiones] = useState<SesionReporte[]>([]);
-  const [sessionIdSeleccionada, setSessionIdSeleccionada] = useState<string>(
-    searchParams.get('sessionId') || '',
-  );
-  const [busqueda, setBusqueda] = useState('');
+  const [seleccionada, setSeleccionada] = useState(params.get('sessionId') || '');
   const [cargando, setCargando] = useState(false);
-  const [descargandoExcel, setDescargandoExcel] = useState(false);
-  const [descargandoPdf, setDescargandoPdf] = useState(false);
-  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+  const [descargando, setDescargando] = useState<'excel' | 'pdf' | null>(null);
+  const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [eventosExcel, setEventosExcel] = useState(true);
+  const [referencia, setReferencia] = useState(true);
+  const [incidentes, setIncidentes] = useState(true);
+  const [eventosPdf, setEventosPdf] = useState(false);
+  const sesion = sesiones.find(s => s.id === seleccionada);
 
-  const cargarSesiones = async () => {
-    setCargando(true);
+  const cargar = async () => {
+    setCargando(true); setError('');
+    try { const res = await api.get('/supervision/sesiones'); setSesiones(res.data); }
+    catch { setError('No se pudieron cargar las sesiones. Vuelve a intentarlo.'); }
+    finally { setCargando(false); }
+  };
+  useEffect(() => { void cargar(); }, []);
+  useEffect(() => { const id = params.get('sessionId'); if (id) setSeleccionada(id); }, [params]);
+
+  const descargar = async (tipo: 'excel' | 'pdf') => {
+    if (!sesion || descargando) return;
+    setDescargando(tipo); setError(''); setMensaje('');
     try {
-      const res = await api.get('/supervision/sesiones');
-      setSesiones(res.data || []);
-      if (!sessionIdSeleccionada && res.data && res.data.length > 0) {
-        setSessionIdSeleccionada(res.data[0].id);
-      }
-    } catch {
-      setSesiones([]);
-    } finally {
-      setCargando(false);
-    }
+      const opciones = tipo === 'excel' ? { eventos: eventosExcel, referencia } : { incidentes, eventos: eventosPdf };
+      const ruta = tipo === 'excel' ? 'ergonomico-excel' : 'forense-pdf';
+      const res = await api.get(`/supervision/reportes/${sesion.id}/${ruta}`, { params: opciones, responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const enlace = document.createElement('a'); enlace.href = url; enlace.download = `informe-${tipo === 'excel' ? 'ergonomico' : 'supervision'}-${sesion.id.slice(0, 8)}.${tipo === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(enlace); enlace.click(); enlace.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMensaje('Informe descargado.');
+    } catch { setError('No se pudo generar el informe. Comprueba la conexión y vuelve a intentarlo.'); }
+    finally { setDescargando(null); }
   };
 
-  useEffect(() => {
-    cargarSesiones();
-  }, []);
-
-  useEffect(() => {
-    const urlSid = searchParams.get('sessionId');
-    if (urlSid) {
-      setSessionIdSeleccionada(urlSid);
-    }
-  }, [searchParams]);
-
-  const descargarExcel = async (targetId?: string) => {
-    const sid = targetId || sessionIdSeleccionada.trim();
-    if (!sid) return;
-    setDescargandoExcel(true);
-    setMensajeExito(null);
-    try {
-      const res = await api.get(`/supervision/reportes/${sid}/ergonomico-excel`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `reporte-ergonomico-${sid.slice(0, 8)}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setMensajeExito('Reporte ergonómico generado y descargado exitosamente en Excel (.xlsx)');
-    } catch {
-      // Manejar error silencioso
-    } finally {
-      setDescargandoExcel(false);
-    }
-  };
-
-  const descargarPdf = async (targetId?: string) => {
-    const sid = targetId || sessionIdSeleccionada.trim();
-    if (!sid) return;
-    setDescargandoPdf(true);
-    setMensajeExito(null);
-    try {
-      const res = await api.get(`/supervision/reportes/${sid}/forense-pdf`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `dictamen-forense-${sid.slice(0, 8)}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setMensajeExito('Dictamen forense pericial generado y descargado con sello SHA-256 (.pdf)');
-    } catch {
-      // Manejar error silencioso
-    } finally {
-      setDescargandoPdf(false);
-    }
-  };
-
-  const sesionesFiltradas = sesiones.filter((s) => {
-    const q = busqueda.toLowerCase().trim();
-    if (!q) return true;
-    const nombre = `${s.usuario?.nombre || ''} ${s.usuario?.apellido || ''}`.toLowerCase();
-    const correo = (s.usuario?.correo || '').toLowerCase();
-    const id = s.id.toLowerCase();
-    const tipo = s.tipo.toLowerCase();
-    return nombre.includes(q) || correo.includes(q) || id.includes(q) || tipo.includes(q);
-  });
-
-  const sesionActual = sesiones.find((s) => s.id === sessionIdSeleccionada);
-
-  return (
-    <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileText className="w-5 h-5 text-emerald-600" />
-            <span>Centro de Reportes y Dictámenes Certificados</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Exportación de informes ergonómicos corporativos en Excel y dictámenes de supervisión en PDF
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate('/consola-supervision')}
-          className="px-3.5 py-2 rounded-xl bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-        >
-          <span>Ir a Consola en Tiempo Real</span>
-          <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-        </button>
+  return <div className="space-y-6">
+    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
+      <div><h1 className="text-xl font-bold text-slate-900">Centro de reportes</h1><p className="mt-1 text-sm text-slate-500">Elige una sesión y prepara un informe con los datos que necesitas.</p></div>
+      <button onClick={() => navigate('/consola-supervision')} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeft className="h-4 w-4"/> Volver a supervisión</button>
+    </header>
+    {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+    {mensaje && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{mensaje}</p>}
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">1. Selecciona la sesión</p>
+        {sesion ? <><h2 className="mt-2 text-lg font-bold text-slate-900">{sesion.usuario ? `${sesion.usuario.nombre} ${sesion.usuario.apellido}` : 'Persona no disponible'}</h2><p className="mt-1 text-sm text-slate-600">{sesion.questionnaire?.titulo || (sesion.tipo === 'EXAMEN' ? 'Examen sin nombre' : sesion.tipo === 'TELETRABAJO' ? 'Teletrabajo' : sesion.tipo)} · {sesion.estado === 'EN_PROGRESO' ? 'En curso' : ['FINALIZADA', 'COMPLETADA'].includes(sesion.estado) ? 'Finalizada' : sesion.estado}</p><p className="mt-1 text-xs text-slate-500">Inicio: {new Date(sesion.inicio).toLocaleString()} · ID: {sesion.id.slice(0, 8)}</p><p className="mt-2 text-xs text-slate-500">{sesion._count?.eventosConducta ?? 0} eventos · {sesion._count?.incidentes ?? 0} situaciones registradas</p></> : <p className="mt-2 text-sm text-slate-600">{cargando ? 'Cargando sesiones...' : seleccionada ? 'La sesión solicitada no está disponible. Elige otra sesión.' : 'Aún no has elegido una sesión.'}</p>}</div>
+        <div className="flex items-center gap-2"><SelectorSesiones sesiones={sesiones} seleccionada={seleccionada} deshabilitado={!!descargando} onSeleccionar={(id) => { setSeleccionada(id); setMensaje(''); }} /><button onClick={cargar} disabled={cargando} aria-label="Actualizar sesiones" title="Actualizar sesiones" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"><RefreshCw className={`h-4 w-4 ${cargando ? 'animate-spin' : ''}`}/></button></div>
       </div>
-
-      {/* Mensaje de Éxito */}
-      {mensajeExito && (
-        <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs shadow-2xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-medium">{mensajeExito}</span>
-        </div>
-      )}
-
-      {/* Tarjetas Principales de Descarga Oficial */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Tarjeta Reporte Ergonómico Excel */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-                <FileSpreadsheet className="w-5 h-5" />
-              </div>
-              <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-semibold">
-                Formato Corporativo • Multi-pestaña
-              </span>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Reporte Ergonómico Corporativo (.xlsx)</h3>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Matriz analítica para Comités de SST y Medicina Laboral. Incluye carátula ejecutiva, resumen estadístico de postura, bitácora detallada de ángulos articulares y desglose de alertas RULA.
-              </p>
-            </div>
-            <div className="text-[11px] text-slate-500 font-mono space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <div className="flex items-center justify-between">
-                <span>Sesión seleccionada:</span>
-                <span className="font-semibold text-slate-800">{sessionIdSeleccionada ? sessionIdSeleccionada.slice(0, 12) + '...' : 'Ninguna'}</span>
-              </div>
-              {sesionActual && (
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Evaluado:</span>
-                  <span className="text-slate-800">{sesionActual.usuario ? `${sesionActual.usuario.nombre} ${sesionActual.usuario.apellido}` : 'Usuario Demo'}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={() => descargarExcel()}
-            disabled={descargandoExcel || !sessionIdSeleccionada.trim()}
-            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition-all disabled:opacity-40 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>{descargandoExcel ? 'Generando Excel...' : 'Descargar Informe Ergonómico (.xlsx)'}</span>
-          </button>
-        </div>
-
-        {/* Tarjeta Dictamen Forense PDF */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <span className="px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-mono font-semibold">
-                Dictamen Pericial • Sello SHA-256
-              </span>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Dictamen de Supervisión y Seguridad (.pdf)</h3>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Expediente individual de supervisión. Contiene índice de integridad, cronología de incidentes detectados, trazabilidad de eventos y verificación de integridad.
-              </p>
-            </div>
-            <div className="text-[11px] text-slate-500 font-mono space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <div className="flex items-center justify-between">
-                <span>Score de Integridad:</span>
-                <span className="font-bold text-emerald-700">
-                  {sesionActual?.scoreIntegridad !== undefined ? `${sesionActual.scoreIntegridad} / 100` : 'Auditado'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Certificación:</span>
-                <span className="text-slate-800">Integridad criptográfica verificada</span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => descargarPdf()}
-            disabled={descargandoPdf || !sessionIdSeleccionada.trim()}
-            className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition-all disabled:opacity-40 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>{descargandoPdf ? 'Generando Dictamen...' : 'Descargar Dictamen en PDF'}</span>
-          </button>
-        </div>
+    </section>
+    <section><h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">2. Personaliza y descarga</h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-3"><FileSpreadsheet className="h-6 w-6 text-emerald-600"/><h3 className="font-bold text-slate-900">Informe ergonómico · Excel</h3></div><p className="mt-3 text-sm text-slate-600">Incluye un resumen de la sesión y los valores posturales disponibles.</p>
+          <fieldset className="mt-5 flex-1 space-y-2 text-sm text-slate-700"><legend className="mb-2 text-xs font-semibold text-slate-500">APARTADOS OPCIONALES</legend><OpcionReporte titulo="Eventos posturales" descripcion="Fecha, puntuación y ángulos disponibles." valor={eventosExcel} alCambiar={setEventosExcel} /><OpcionReporte titulo="Referencia RULA" descripcion="Rangos y orientación para interpretar la puntuación." valor={referencia} alCambiar={setReferencia} /></fieldset>
+          <button disabled={!sesion || !!descargando} onClick={() => descargar('excel')} className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4"/>{descargando === 'excel' ? 'Generando...' : 'Descargar Excel'}</button>
+        </article>
+        <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-3"><FileText className="h-6 w-6 text-sky-600"/><h3 className="font-bold text-slate-900">Informe de supervisión · PDF</h3></div><p className="mt-3 text-sm text-slate-600">Resume la sesión y permite incluir el detalle de situaciones y eventos.</p>
+          <fieldset className="mt-5 flex-1 space-y-2 text-sm text-slate-700"><legend className="mb-2 text-xs font-semibold text-slate-500">APARTADOS OPCIONALES</legend><OpcionReporte titulo="Situaciones y decisiones" descripcion="Incluye las observaciones y notas de revisión." valor={incidentes} alCambiar={setIncidentes} /><OpcionReporte titulo="Eventos registrados" descripcion="Añade la lista de eventos de la sesión." valor={eventosPdf} alCambiar={setEventosPdf} /></fieldset>
+          <button disabled={!sesion || !!descargando} onClick={() => descargar('pdf')} className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4"/>{descargando === 'pdf' ? 'Generando...' : 'Descargar PDF'}</button>
+        </article>
       </div>
-
-      {/* Directorio de Sesiones Disponibles para Exportación */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs space-y-3 p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-600" />
-              <span>Directorio de Sesiones para Exportación</span>
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Haga clic en cualquier sesión para seleccionarla y descargar sus reportes asociados
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar por usuario o ID..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all font-medium"
-              />
-            </div>
-            <button
-              onClick={cargarSesiones}
-              disabled={cargando}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-              title="Refrescar lista"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabla de Sesiones */}
-        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50/90 border-b border-slate-200 text-[11px] text-slate-500 uppercase font-mono font-semibold tracking-wider">
-              <tr>
-                <th className="py-3 px-3.5">Sesión / Evaluado</th>
-                <th className="py-3 px-3.5">Tipo</th>
-                <th className="py-3 px-3.5">Fecha y Hora</th>
-                <th className="py-3 px-3.5">Estado</th>
-                <th className="py-3 px-3.5">Integridad</th>
-                <th className="py-3 px-3.5 text-right">Descargas Directas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sesionesFiltradas.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
-                    No se encontraron sesiones registradas para exportar.
-                  </td>
-                </tr>
-              ) : (
-                sesionesFiltradas.map((s) => {
-                  const esSeleccionada = sessionIdSeleccionada === s.id;
-                  return (
-                    <tr
-                      key={s.id}
-                      onClick={() => setSessionIdSeleccionada(s.id)}
-                      className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
-                        esSeleccionada ? 'bg-emerald-50/40 font-medium' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${esSeleccionada ? 'bg-emerald-600' : 'bg-slate-300'}`} />
-                          <div>
-                            <span className="font-semibold text-slate-900 block">
-                              {s.usuario ? `${s.usuario.nombre} ${s.usuario.apellido}` : 'Evaluado Demo'}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              ID: {s.id.slice(0, 8)}...
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-3.5">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 text-slate-700 border border-slate-200">
-                          {s.tipo}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-3.5 text-slate-600 font-mono text-[11px]">
-                        {new Date(s.inicio).toLocaleString()}
-                      </td>
-
-                      <td className="py-3 px-3.5">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase ${
-                            s.estado === 'COMPLETADA'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-800 border border-amber-200'
-                          }`}
-                        >
-                          {s.estado}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-3.5 font-mono text-[11px]">
-                        <span className="text-emerald-700 font-bold">
-                          {s.scoreIntegridad !== undefined ? `${s.scoreIntegridad} pts` : '—'}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => descargarExcel(s.id)}
-                            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors cursor-pointer"
-                            title="Descargar Excel (.xlsx)"
-                          >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => descargarPdf(s.id)}
-                            className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-colors cursor-pointer"
-                            title="Descargar Dictamen Forense PDF (.pdf)"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+      <p className="mt-3 text-xs text-slate-500">Los informes reflejan los datos registrados para la sesión elegida. Las situaciones requieren revisión humana.</p>
+    </section>
+  </div>;
 };
 export default PaginaReportes;

@@ -7,9 +7,10 @@ import { BitacoraInmutableService } from './services/bitacora-inmutable.service'
 import { GeneradorReportesService } from './services/generador-reportes.service';
 import { SupervisionGateway } from './gateways/supervision.gateway';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule],
   controllers: [SupervisionController, SupervisionSp4Controller],
   providers: [
     SupervisionService,

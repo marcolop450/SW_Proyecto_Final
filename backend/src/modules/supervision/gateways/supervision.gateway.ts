@@ -8,11 +8,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
 
 export type EstadoSemaforo = 'VERDE' | 'AMARILLO' | 'NARANJA' | 'ROJO' | 'GRIS';
 
 export interface PuestoMonitoreo {
   sessionId: string;
+  organizationId: string;
   usuarioNombre: string;
   rol: string;
   tipo: string;
@@ -31,9 +33,24 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
   private puestos: Map<string, PuestoMonitoreo> = new Map();
   private watchdogInterval: NodeJS.Timeout | null = null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly jwt: JwtService) {}
 
   async afterInit() {
+    this.server.use(async (client, next) => {
+      try {
+        const token = client.handshake.auth?.token;
+        if (!token) return next(new Error('No autenticado'));
+        const payload = await this.jwt.verifyAsync<{ sub: string; organizationId: string }>(token);
+        const membership = await this.prisma.usuarioOrganizacion.findFirst({
+          where: { usuarioId: payload.sub, organizacionId: payload.organizationId, usuario: { activo: true }, organizacion: { activo: true } },
+          select: { usuarioId: true, organizacionId: true },
+        });
+        if (!membership) return next(new Error('No autorizado'));
+        client.data.userId = membership.usuarioId;
+        client.data.organizationId = membership.organizacionId;
+        next();
+      } catch { next(new Error('No autenticado')); }
+    });
     // Cargar sesiones reales desde PostgreSQL al iniciar
     await this.cargarSesionesDesdeBaseDatos();
 
@@ -56,9 +73,10 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     }, 5000);
   }
 
-  async cargarSesionesDesdeBaseDatos(): Promise<PuestoMonitoreo[]> {
+  async cargarSesionesDesdeBaseDatos(organizationId?: string): Promise<PuestoMonitoreo[]> {
     try {
       const sesiones = await this.prisma.supervisionSession.findMany({
+        where: { ...(organizationId ? { organizationId } : {}), estado: 'EN_PROGRESO' },
         take: 10,
         orderBy: { inicio: 'desc' },
         include: {
@@ -118,7 +136,8 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
           estado,
           rulaScore,
           pitchEfectivo,
-          ultimoHeartbeat: ahora - (estado === 'GRIS' ? 25000 : 2000),
+          ultimoHeartbeat: ahora - 25000,
+          organizationId: sesion.organizationId,
           motivoAlerta: motivo,
         };
 
@@ -126,14 +145,16 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
       }
 
       this.emitirActualizacionPuestos();
-      return Array.from(this.puestos.values());
+      return this.obtenerPuestos(organizationId);
     } catch {
-      return Array.from(this.puestos.values());
+      return this.obtenerPuestos(organizationId);
     }
   }
 
   handleConnection(client: Socket) {
-    client.emit('puestos_actualizados', Array.from(this.puestos.values()));
+    const organizationId = client.data.organizationId;
+    client.join(`org:${organizationId}`);
+    client.emit('puestos_actualizados', this.obtenerPuestos(organizationId));
   }
 
   handleDisconnect(client: Socket) {
@@ -147,18 +168,16 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
   }
 
   @SubscribeMessage('registrar_puesto')
-  handleRegistrarPuesto(client: Socket, payload: { sessionId: string; usuarioNombre: string; tipo: string }) {
-    client.data.sessionId = payload.sessionId;
-    const nuevoPuesto: PuestoMonitoreo = {
-      sessionId: payload.sessionId,
-      usuarioNombre: payload.usuarioNombre || 'Puesto Activo',
-      rol: 'EVALUADO',
-      tipo: payload.tipo || 'EXAMEN',
-      estado: 'VERDE',
-      ultimoHeartbeat: Date.now(),
-    };
-    this.puestos.set(payload.sessionId, nuevoPuesto);
-    this.emitirActualizacionPuestos();
+  async handleRegistrarPuesto(client: Socket, payload: { sessionId: string }) {
+    if (!client.data.userId || !payload?.sessionId) return;
+    const session = await this.prisma.supervisionSession.findFirst({
+      where: { id: payload.sessionId, userId: client.data.userId, organizationId: client.data.organizationId, estado: 'EN_PROGRESO' },
+      include: { usuario: true },
+    });
+    if (!session) return;
+    client.data.sessionId = session.id;
+    client.join(`session:${session.id}`);
+    this.registrarSesionActiva({ sessionId: session.id, organizationId: session.organizationId, usuarioNombre: `${session.usuario.nombre} ${session.usuario.apellido}`, tipo: session.tipo });
   }
 
   @SubscribeMessage('heartbeat')
@@ -187,7 +206,7 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     },
   ) {
     const sessionId = payload.sessionId || client.data?.sessionId;
-    if (sessionId && this.puestos.has(sessionId)) {
+    if (sessionId && sessionId === client.data?.sessionId && this.puestos.has(sessionId)) {
       const puesto = this.puestos.get(sessionId)!;
       puesto.estado = payload.estado;
       if (payload.rulaScore !== undefined) puesto.rulaScore = payload.rulaScore;
@@ -207,8 +226,61 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     }
   }
 
-  public obtenerPuestos(): PuestoMonitoreo[] {
-    return Array.from(this.puestos.values());
+  public obtenerPuestos(organizationId?: string): PuestoMonitoreo[] {
+    return Array.from(this.puestos.values()).filter((p) => !organizationId || p.organizationId === organizationId);
+  }
+
+  public registrarSesionActiva(input: Pick<PuestoMonitoreo, 'sessionId' | 'organizationId' | 'usuarioNombre' | 'tipo'>) {
+    this.puestos.set(input.sessionId, {
+      ...input,
+      rol: 'EVALUADO',
+      estado: 'VERDE',
+      ultimoHeartbeat: Date.now(),
+      motivoAlerta: 'Examen iniciado; esperando telemetría',
+    });
+    this.emitirActualizacionPuestos();
+  }
+
+  public async vincularSesion(sessionId: string, userId: string) {
+    const session = await this.prisma.supervisionSession.findFirst({
+      where: { id: sessionId, userId, estado: 'EN_PROGRESO' },
+      include: { usuario: true },
+    });
+    if (!session) return;
+    this.registrarSesionActiva({
+      sessionId,
+      organizationId: session.organizationId,
+      usuarioNombre: `${session.usuario.nombre} ${session.usuario.apellido}`,
+      tipo: session.tipo,
+    });
+  }
+
+  public registrarTelemetria(sessionId: string, organizationId: string, tipo: string, detalles: any) {
+    const puesto = this.puestos.get(sessionId);
+    if (!puesto || puesto.organizationId !== organizationId) return;
+    puesto.ultimoHeartbeat = Date.now();
+    const rula = Number(detalles?.rulaScore);
+    if (Number.isFinite(rula)) puesto.rulaScore = rula;
+    const pitch = Number(detalles?.pitchEfectivo ?? detalles?.pitch);
+    if (Number.isFinite(pitch)) puesto.pitchEfectivo = pitch;
+    if (['MULTIPLE_FACES', 'FACE_ABSENT'].includes(tipo)) {
+      puesto.estado = 'ROJO'; puesto.motivoAlerta = tipo === 'MULTIPLE_FACES' ? 'Múltiples rostros detectados' : 'Rostro ausente';
+    } else if (tipo === 'POSTURA_FORZADA' || (Number.isFinite(rula) && rula >= 5)) {
+      puesto.estado = 'NARANJA'; puesto.motivoAlerta = 'Riesgo ergonómico detectado';
+    } else if (['GAZE_OFFSCREEN', 'WINDOW_BLUR', 'GAZE_DOWN_SUSTAINED'].includes(tipo)) {
+      puesto.estado = 'AMARILLO'; puesto.motivoAlerta = 'Distracción o desvío de mirada detectado';
+    } else {
+      puesto.estado = 'VERDE'; puesto.motivoAlerta = undefined;
+    }
+    this.emitirActualizacionPuestos();
+  }
+
+  public finalizarSesion(sessionId: string) {
+    const puesto = this.puestos.get(sessionId);
+    if (!puesto) return;
+    puesto.estado = 'GRIS';
+    puesto.motivoAlerta = 'Examen finalizado';
+    this.emitirActualizacionPuestos();
   }
 
   public limpiarPuestos() {
@@ -216,11 +288,10 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     this.emitirActualizacionPuestos();
   }
 
-  public async simularPuestosDemo(): Promise<PuestoMonitoreo[]> {
+  public async simularPuestosDemo(organizationId: string): Promise<PuestoMonitoreo[]> {
     const ahora = new Date();
-    const organizacion = await this.prisma.organizacion.findFirst();
-    const orgId = organizacion?.id || '575299ae-49c2-4f9b-ae55-94e0837fba59';
-    const usuarios = await this.prisma.usuario.findMany({ take: 5 });
+    const orgId = organizationId;
+    const usuarios = await this.prisma.usuarioOrganizacion.findMany({ where: { organizacionId: orgId }, take: 5, include: { usuario: true } });
 
     const presets = [
       {
@@ -270,11 +341,13 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
       },
     ];
 
-    this.puestos.clear();
+    for (const [sessionId, puesto] of this.puestos) {
+      if (puesto.organizationId === orgId) this.puestos.delete(sessionId);
+    }
 
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
-      const usr = usuarios[i % usuarios.length];
+      const usr = usuarios[i % usuarios.length]?.usuario;
       if (!usr) continue;
 
       // Crear sesión real persistida en PostgreSQL
@@ -320,6 +393,7 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
 
       const puesto: PuestoMonitoreo = {
         sessionId: sesion.id,
+        organizationId: orgId,
         usuarioNombre: `${usr.nombre} ${usr.apellido}`,
         rol: 'EVALUADO',
         tipo: p.tipo,
@@ -334,12 +408,12 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     }
 
     this.emitirActualizacionPuestos();
-    return Array.from(this.puestos.values());
+    return this.obtenerPuestos(orgId);
   }
 
   private emitirActualizacionPuestos() {
     if (this.server) {
-      this.server.emit('puestos_actualizados', Array.from(this.puestos.values()));
+      this.puestos.forEach((puesto) => this.server.to(`org:${puesto.organizationId}`).emit('puestos_actualizados', this.obtenerPuestos(puesto.organizationId)));
     }
   }
 }

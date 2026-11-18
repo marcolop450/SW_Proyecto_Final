@@ -92,7 +92,8 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setFiltroEstado('TODOS')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'TODOS'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'TODOS'
                   ? 'bg-emerald-600 text-white shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -102,58 +103,63 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
             </button>
             <button
               onClick={() => setFiltroEstado('VERDE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'VERDE'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'VERDE'
                   ? 'bg-emerald-600 text-white font-semibold shadow-2xs'
                   : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
               }`}
             >
-              🟢 Óptimos ({conteos.VERDE})
+              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500" /> Óptimos ({conteos.VERDE})
             </button>
             <button
               onClick={() => setFiltroEstado('AMARILLO')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'AMARILLO'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'AMARILLO'
                   ? 'bg-amber-500 text-white font-semibold shadow-2xs'
                   : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
               }`}
             >
-              🟡 Distraídos ({conteos.AMARILLO})
+              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-500" /> Distraídos ({conteos.AMARILLO})
             </button>
             <button
               onClick={() => setFiltroEstado('NARANJA')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'NARANJA'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'NARANJA'
                   ? 'bg-orange-500 text-white font-semibold shadow-2xs'
                   : 'bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100'
               }`}
             >
-              🟠 Riesgo Ergo ({conteos.NARANJA})
+              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-orange-500" /> Riesgo Ergo ({conteos.NARANJA})
             </button>
             <button
               onClick={() => setFiltroEstado('ROJO')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'ROJO'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'ROJO'
                   ? 'bg-rose-600 text-white font-semibold shadow-2xs'
                   : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
               }`}
             >
-              🔴 Críticos ({conteos.ROJO})
+              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-rose-500" /> Críticos ({conteos.ROJO})
             </button>
             <button
               onClick={() => setFiltroEstado('GRIS')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
+              aria-pressed={filtroEstado === 'GRIS'}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
                 filtroEstado === 'GRIS'
                   ? 'bg-slate-700 text-white font-semibold shadow-2xs'
                   : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
               }`}
             >
-              ⚪ Inactivos ({conteos.GRIS})
+              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-slate-400" /> Inactivos ({conteos.GRIS})
             </button>
           </div>
 
           {/* Buscador */}
-          <div className="relative min-w-[220px]">
+          <div className="relative w-full md:w-60 md:min-w-[220px]">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"

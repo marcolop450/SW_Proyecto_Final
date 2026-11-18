@@ -28,8 +28,8 @@ export class SupervisionController {
   }
 
   @Get('cuestionarios/codigo/:codigo')
-  async validarCodigo(@Param('codigo') codigo: string) {
-    return this.supervisionService.validarCodigo(codigo);
+  async validarCodigo(@Param('codigo') codigo: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.supervisionService.validarCodigo(codigo, user.organizationId);
   }
 
   @Post('sesion/iniciar')

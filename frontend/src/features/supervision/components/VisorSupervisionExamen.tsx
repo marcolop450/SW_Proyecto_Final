@@ -8,6 +8,7 @@ import { useTelemetriaNavegador } from '../hooks/useTelemetriaNavegador';
 import { useModoEntrevista } from '../hooks/useModoEntrevista';
 import { ModalPreguntaEntrevista } from './ModalPreguntaEntrevista';
 import { api as clienteAxios } from '../../../api/client';
+import { io } from 'socket.io-client';
 
 interface Props {
   sessionId: string;
@@ -30,6 +31,20 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
   const detectorCelularRef = useRef(new DetectorSospechaCelular());
   const auditorRostrosRef = useRef(new AuditorPresenciaRostros());
   const animFrameRef = useRef<number | null>(null);
+  const finalizar = async () => {
+    try { await clienteAxios.post(`/supervision/sesion/${sessionId}/finalizar`, {}); } catch {}
+    onFinalizar();
+  };
+
+  useEffect(() => {
+    const socket = io(window.location.origin + '/supervision', {
+      auth: { token: localStorage.getItem('ergocheck_token') },
+      transports: ['websocket', 'polling'],
+    });
+    socket.on('connect', () => socket.emit('registrar_puesto', { sessionId }));
+    const heartbeat = setInterval(() => { if (socket.connected) socket.emit('heartbeat', { sessionId }); }, 5000);
+    return () => { clearInterval(heartbeat); socket.disconnect(); };
+  }, [sessionId]);
 
   const registrarEventoEnBackend = async (tipo: string, severidad: string, duracionMs = 0, detalles = {}) => {
     try {
@@ -69,14 +84,14 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
       setSegundosRestantes((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          onFinalizar();
+          void finalizar();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [onFinalizar]);
+  }, [onFinalizar, sessionId]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -191,7 +206,7 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
             </button>
           )}
           <button
-            onClick={onFinalizar}
+            onClick={finalizar}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition"
           >
             <CheckCircle className="w-3.5 h-3.5 text-[#C6F432]" />
