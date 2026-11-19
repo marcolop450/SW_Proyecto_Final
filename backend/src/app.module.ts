@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ContextoAuditoriaModule } from './common/auditoria/contexto-auditoria.module';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { HealthController } from './health/health.controller';
@@ -19,6 +20,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ContextoAuditoriaModule,
     PrismaModule,
     AuthModule,
     OrganizacionesModule,

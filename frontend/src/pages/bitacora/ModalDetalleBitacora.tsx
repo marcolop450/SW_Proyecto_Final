@@ -145,17 +145,19 @@ export const ModalDetalleBitacora: React.FC<ModalDetalleBitacoraProps> = ({ regi
                   <Hash className="w-3.5 h-3.5 text-slate-400" />
                   Hash del Bloque Previo (Cadena Criptográfica)
                 </span>
-                <button
-                  type="button"
-                  onClick={() => copiarTexto(registro.prevHash, false)}
-                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-emerald-700 transition-colors font-medium cursor-pointer"
-                >
-                  {copiadoPrev ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  {copiadoPrev ? '¡Copiado!' : 'Copiar'}
-                </button>
+                {registro.prevHash && (
+                  <button
+                    type="button"
+                    onClick={() => copiarTexto(registro.prevHash, false)}
+                    className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-emerald-700 transition-colors font-medium cursor-pointer"
+                  >
+                    {copiadoPrev ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiadoPrev ? '¡Copiado!' : 'Copiar'}
+                  </button>
+                )}
               </div>
               <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 font-mono text-[11px] text-slate-600 font-medium break-all select-all">
-                {registro.prevHash || 'GENESIS_HASH_ERGOCHECK_2026'}
+                {registro.prevHash || 'Sin referencia visible'}
               </p>
             </div>
           </div>
