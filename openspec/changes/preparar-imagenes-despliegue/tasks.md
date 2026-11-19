@@ -20,4 +20,4 @@
 - La conexión WebSocket atravesó Nginx y recibió el rechazo esperado por falta de autenticación.
 - Las imágenes finales excluyen los archivos .env. El backend ocupó 630,0 MiB y el frontend 158,7 MiB.
 - La prueba retiró sus contenedores y su red temporal.
-- La auditoría de las dependencias de producción del backend reportó 15 vulnerabilidades, de las cuales 7 son altas y 8 moderadas. Su revisión queda pendiente en la preparación para publicar.
+- La auditoría inicial de las dependencias de producción del backend reportó 15 vulnerabilidades, de las cuales 7 eran altas y 8 moderadas. Su corrección y verificación se documentan en el cambio corregir-vulnerabilidades-backend.

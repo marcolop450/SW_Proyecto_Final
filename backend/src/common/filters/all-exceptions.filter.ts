@@ -39,6 +39,14 @@ const ERROR_CODE_MAP: Record<number, { code: string; message: string }> = {
     code: 'ERR_DUPLICATE_ENTRY',
     message: 'El registro ya existe o entra en conflicto con un dato existente.',
   },
+  [HttpStatus.PAYLOAD_TOO_LARGE]: {
+    code: 'ERR_PAYLOAD_TOO_LARGE',
+    message: 'El cuerpo de la solicitud supera el tamaño permitido.',
+  },
+  [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: {
+    code: 'ERR_UNSUPPORTED_MEDIA_TYPE',
+    message: 'El tipo de contenido o su codificación son incompatibles con esta solicitud.',
+  },
   [HttpStatus.UNPROCESSABLE_ENTITY]: {
     code: 'ERR_UNPROCESSABLE_ENTITY',
     message: 'La solicitud no puede ser procesada debido a reglas de negocio no satisfechas.',
@@ -94,6 +102,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         technicalDetails = resObj;
       }
     } else if (exception instanceof Error) {
+      const bodyError = exception as Error & { status?: number; expose?: boolean };
+      if (bodyError.expose === true && [400, 413, 415].includes(bodyError.status)) {
+        statusCode = bodyError.status;
+        errorCode = ERROR_CODE_MAP[statusCode].code;
+        userMessage = ERROR_CODE_MAP[statusCode].message;
+      }
       technicalDetails = {
         name: exception.name,
         message: exception.message,
