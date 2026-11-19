@@ -29,10 +29,10 @@ export const BannerSesionActiva: React.FC<BannerSesionActivaProps> = ({
             </span>
           </div>
           <h3 className="text-sm font-bold text-slate-900 mt-0.5">
-            Monitoreo Biomecánico Activo en Segundo Plano
+            Tienes una sesión registrada en curso
           </h3>
           <p className="text-xs text-slate-600">
-            Puedes reanudar el visor con esqueleto articular o finalizar y consolidar las métricas acumuladas.
+            Continúa la sesión para volver a activar la cámara o finalízala para consultar sus datos.
           </p>
         </div>
       </div>

@@ -1,0 +1,2 @@
+- [x] Reorganizar el panel y sus accesos.
+- [x] Mostrar datos reales y estados de error.

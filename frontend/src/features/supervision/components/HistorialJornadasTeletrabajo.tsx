@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Calendar, Clock, Activity, Coffee, RotateCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../../../api/client';
+import { descargarComprobanteJornada } from '../services/comprobanteJornada';
 
 export interface SesionTeletrabajo {
   id: string;
@@ -17,15 +18,18 @@ type FiltroTemporal = 'SEMANA' | 'MES' | 'TODAS';
 export const HistorialJornadasTeletrabajo: React.FC = () => {
   const [sesiones, setSesiones] = useState<SesionTeletrabajo[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [filtro, setFiltro] = useState<FiltroTemporal>('SEMANA');
 
   const cargarHistorial = async () => {
     setCargando(true);
+    setError('');
     try {
       const res = await api.get('/supervision/sesiones/teletrabajo');
       setSesiones(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.warn('Error al cargar historial de teletrabajo:', err);
+      setError('No se pudo cargar el historial. Inténtalo nuevamente.');
     } finally {
       setCargando(false);
     }
@@ -128,7 +132,7 @@ export const HistorialJornadasTeletrabajo: React.FC = () => {
       {/* Tarjetas KPI Acumuladas */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Horas en Foco</span>
+          <span className="text-xs font-semibold text-slate-500">Actividad en la página</span>
           <p className="text-2xl font-mono font-bold text-emerald-700 mt-1">
             {formatearSegundos(kpis.totalActivoSeg)}
           </p>
@@ -179,7 +183,7 @@ export const HistorialJornadasTeletrabajo: React.FC = () => {
             <RotateCw className="w-6 h-6 animate-spin mx-auto text-slate-300 mb-2" />
             Cargando registros desde base de datos...
           </div>
-        ) : sesionesFiltradas.length === 0 ? (
+        ) : error ? <p role="alert" className="p-5 text-sm text-rose-700">{error}</p> : sesionesFiltradas.length === 0 ? (
           <div className="py-12 text-center space-y-2">
             <Calendar className="w-8 h-8 text-slate-300 mx-auto stroke-1" />
             <p className="text-xs font-semibold text-slate-600">No hay jornadas en este período</p>
@@ -209,8 +213,9 @@ export const HistorialJornadasTeletrabajo: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-5 text-right w-full sm:w-auto justify-between sm:justify-end">
+                  {s.estado === 'FINALIZADA' && <button type="button" onClick={() => descargarComprobanteJornada(s.id).catch(() => setError('No se pudo descargar el comprobante.'))} className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Comprobante PDF</button>}
                   <div>
-                    <span className="text-[10px] uppercase font-mono text-slate-400 block">Foco</span>
+                    <span className="text-[10px] uppercase font-mono text-slate-400 block">Actividad</span>
                     <span className="text-xs font-mono font-bold text-emerald-700">
                       {formatearSegundos(s.tiempoActivoSeg)}
                     </span>

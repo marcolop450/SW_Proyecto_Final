@@ -1,8 +1,6 @@
 import { EvaluacionRula, NivelRiesgoRula } from '../types/ergonomia.types';
 
-// Tablas de puntuación RULA estándar (ISO 11226)
-// Grupo A: Brazo, Antebrazo, Muñeca
-// Grupo B: Cuello, Tronco, Piernas
+// Heurística orientativa: no implementa la evaluación RULA completa.
 export class MotorRula {
   private tiempoMismaPosturaSeg: number = 0;
   private ultimoCuello: number = 0;
@@ -65,16 +63,16 @@ export class MotorRula {
 
     if (puntajeFinal <= 2) {
       nivelRiesgo = 'OPTIMO';
-      etiquetaRiesgo = 'Postura Óptima (Riesgo Despreciable)';
+      etiquetaRiesgo = 'Indicador bajo';
     } else if (puntajeFinal <= 4) {
       nivelRiesgo = 'BAJO';
-      etiquetaRiesgo = 'Bajo Riesgo (Aceptable)';
+      etiquetaRiesgo = 'Indicador moderado';
     } else if (puntajeFinal <= 6) {
       nivelRiesgo = 'MEDIO';
-      etiquetaRiesgo = 'Riesgo Medio (Requiere Corrección)';
+      etiquetaRiesgo = 'Indicador elevado';
     } else {
       nivelRiesgo = 'CRITICO';
-      etiquetaRiesgo = 'Riesgo Alto (Intervención Inmediata)';
+      etiquetaRiesgo = 'Indicador muy elevado';
     }
 
     return {

@@ -2,18 +2,20 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Video, VideoOff, Eye, EyeOff, ExternalLink, ShieldCheck, UserCheck, AlertTriangle, UserX } from 'lucide-react';
 import { obtenerDetectorFacial, reiniciarDetectorFacial } from '../services/detectorFacial';
 
-export type EstadoPresencia = 'PRESENTE' | 'AUSENTE' | 'MULTIPLE' | 'REPOSO';
+export type EstadoPresencia = 'PRESENTE' | 'AUSENTE' | 'MULTIPLE' | 'REPOSO' | 'NO_DISPONIBLE';
 
 interface Props {
   enDescanso: boolean;
   onCambioEstadoPresencia: (estado: EstadoPresencia) => void;
+  privacidad?: boolean;
 }
 
 export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
   enDescanso,
   onCambioEstadoPresencia,
+  privacidad = false,
 }) => {
-  const [estado, setEstado] = useState<EstadoPresencia>('PRESENTE');
+  const [estado, setEstado] = useState<EstadoPresencia>('NO_DISPONIBLE');
   const [modoDiscreto, setModoDiscreto] = useState(false);
   const [pipActivo, setPipActivo] = useState(false);
   const [camaraLista, setCamaraLista] = useState(false);
@@ -30,6 +32,7 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
     let activo = true;
 
     if (enDescanso) {
+      inicioAusenciaRef.current = null;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -41,6 +44,8 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
     }
 
     const arrancarCamara = async () => {
+      setEstado('NO_DISPONIBLE');
+      onCambioEstadoPresencia('NO_DISPONIBLE');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 } },
@@ -60,6 +65,8 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
         setCamaraLista(true);
       } catch (err) {
         console.error('Error al inicializar cámara para teletrabajo:', err);
+        setEstado('NO_DISPONIBLE');
+        onCambioEstadoPresencia('NO_DISPONIBLE');
       }
     };
 
@@ -116,6 +123,10 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
         ultimoProcesoRef.current = ahora;
         try {
           const detector = await obtenerDetectorFacial();
+          if (!detector && activo) {
+            setEstado('NO_DISPONIBLE');
+            onCambioEstadoPresencia('NO_DISPONIBLE');
+          }
           if (detector && activo) {
             const res = detector.detectForVideo(video, ahora);
             const caras = res?.faceLandmarks || [];
@@ -145,6 +156,8 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
           }
         } catch (_err) {
           reiniciarDetectorFacial();
+          setEstado('NO_DISPONIBLE');
+          onCambioEstadoPresencia('NO_DISPONIBLE');
         }
       }
 
@@ -206,12 +219,14 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
           {estado === 'AUSENTE' && <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />}
           {estado === 'MULTIPLE' && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />}
           {estado === 'REPOSO' && <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
+          {estado === 'NO_DISPONIBLE' && <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />}
 
           <span className="text-xs font-semibold text-slate-800">
-            {estado === 'PRESENTE' && 'Presencia Verificada en Puesto'}
+            {estado === 'PRESENTE' && 'Rostro detectado en cámara'}
             {estado === 'AUSENTE' && 'Puesto Desatendido (Sin Detección)'}
             {estado === 'MULTIPLE' && 'Múltiples Personas en Encuadre'}
-            {estado === 'REPOSO' && 'Sensor en Pausa (Descanso Activo)'}
+            {estado === 'REPOSO' && (privacidad ? 'Detección pausada por privacidad' : 'Sensor en pausa durante el descanso')}
+            {estado === 'NO_DISPONIBLE' && 'Presencia no disponible: comprueba la cámara'}
           </span>
         </div>
 
@@ -245,9 +260,9 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
             <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <p className="text-sm font-semibold text-slate-200">Cámara en Reposo</p>
+            <p className="text-sm font-semibold text-slate-200">Cámara en reposo</p>
             <p className="text-xs text-slate-400 max-w-xs">
-              Tu privacidad está protegida mientras dure la pausa programada.
+              {privacidad ? 'La detección visual está pausada hasta que decidas reactivarla.' : 'La detección visual está pausada durante el descanso.'}
             </p>
           </div>
         ) : (

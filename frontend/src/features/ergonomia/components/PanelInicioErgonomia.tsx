@@ -1,109 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { Play, Clock, Calendar, ShieldCheck, CheckCircle2, Activity, Sparkles } from 'lucide-react';
+import React from 'react';
+import { Activity, ArrowRight, Camera, CheckCircle2, Coffee, ShieldCheck } from 'lucide-react';
 
 interface Props {
   onIniciarCalibracion: () => void;
   tieneConsentimiento: boolean;
 }
 
-export const PanelInicioErgonomia: React.FC<Props> = ({
-  onIniciarCalibracion,
-  tieneConsentimiento,
-}) => {
-  const [horaActual, setHoraActual] = useState('');
-  const [fechaActual, setFechaActual] = useState('');
-
-  useEffect(() => {
-    const actualizar = () => {
-      const ahora = new Date();
-      setHoraActual(
-        ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      );
-      setFechaActual(
-        ahora.toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-      );
-    };
-
-    actualizar();
-    const timer = setInterval(actualizar, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-6 animate-in fade-in duration-300">
-      <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center mx-auto shadow-xs">
-        <Activity className="w-8 h-8" />
-      </div>
-
-      <div className="space-y-1">
-        <div className="flex items-center justify-center gap-2 text-xs font-mono text-slate-500 uppercase tracking-wider">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span className="capitalize">{fechaActual}</span>
-        </div>
-        <h2 className="text-3xl sm:text-4xl font-mono font-bold text-slate-900 tracking-tight">
-          {horaActual}
-        </h2>
-        <p className="text-sm text-slate-600 max-w-md mx-auto pt-2">
-          Monitoreo biomecánico continuo en el borde (Edge AI) para prevenir fatiga muscular y posturas forzadas.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left pt-2">
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Calibración Neutra</span>
-          </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Captura de ángulos base en 3 segundos.
-          </p>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Motor RULA ISO</span>
-          </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Evaluación articular a 200ms sin grabar video.
-          </p>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Pausas Activas</span>
-          </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Rutinas guiadas ante inmovilidad estática.
-          </p>
-        </div>
-      </div>
-
-      <div className="pt-2">
-        <button
-          onClick={onIniciarCalibracion}
-          disabled={!tieneConsentimiento}
-          className={`inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl font-semibold text-sm tracking-tight shadow-md transition-all ${
-            tieneConsentimiento
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-emerald-600/20 active:scale-98 cursor-pointer'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <Play className="w-4 h-4 fill-current" />
-          <span>Calibrar e Iniciar Sesión Ergonómica</span>
-        </button>
-
-        <p className="text-[11px] text-slate-400 mt-3 flex items-center justify-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Procesamiento efímero en RAM (Zero-Image): ningún fotograma sale de tu equipo.</span>
-        </p>
-      </div>
+export const PanelInicioErgonomia: React.FC<Props> = ({ onIniciarCalibracion, tieneConsentimiento }) => (
+  <section className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs lg:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
+    <div className="flex flex-col items-start p-6 sm:p-8 lg:p-10">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Activity className="h-5 w-5" /></div>
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-emerald-700">Tu espacio de bienestar</p>
+      <h2 className="mt-2 max-w-lg text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Empieza con una postura cómoda</h2>
+      <p className="mt-3 max-w-lg text-sm leading-relaxed text-slate-600">Prepara la cámara y calibra tu posición para consultar indicadores de postura y recordatorios durante tu sesión.</p>
+      <button type="button" onClick={onIniciarCalibracion} disabled={!tieneConsentimiento} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+        Preparar mi sesión <ArrowRight className="h-4 w-4" />
+      </button>
+      {!tieneConsentimiento && <p className="mt-2 text-xs text-rose-700">Necesitas un consentimiento vigente para iniciar.</p>}
+      <div className="mt-6 flex items-start gap-2 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><span>La cámara se utiliza durante la sesión. Revisa los permisos de tu navegador antes de empezar.</span></div>
     </div>
-  );
-};
+    <div className="border-t border-slate-100 bg-slate-50/70 p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Antes de empezar</p>
+      <h3 className="mt-2 text-lg font-bold text-slate-900">Tres pasos para prepararte</h3>
+      <ol className="mt-5 divide-y divide-slate-200/80">
+        <li className="flex gap-3 py-4 first:pt-0"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700"><Camera className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-slate-800">Enciende tu cámara</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Permite el acceso si tu navegador lo solicita y busca un lugar iluminado.</p></div></li>
+        <li className="flex gap-3 py-4"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700"><CheckCircle2 className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-slate-800">Calibra tu posición</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Siéntate cómodamente y sigue las indicaciones de la pantalla.</p></div></li>
+        <li className="flex gap-3 py-4 last:pb-0"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700"><Coffee className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-slate-800">Consulta y descansa</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Revisa tus indicadores y utiliza las pausas guiadas disponibles.</p></div></li>
+      </ol>
+    </div>
+  </section>
+);

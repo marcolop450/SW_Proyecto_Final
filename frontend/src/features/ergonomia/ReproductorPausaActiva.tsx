@@ -34,15 +34,17 @@ interface ReproductorPausaActivaProps {
   onCompletada?: () => void;
   onCerrar?: () => void;
   motivo?: string;
+  duracionEjercicioSeg?: number;
 }
 
 export const ReproductorPausaActiva: React.FC<ReproductorPausaActivaProps> = ({
   onCompletada,
   onCerrar,
   motivo = 'Pausa sugerida para prevención de sobrecarga muscular',
+  duracionEjercicioSeg = 20,
 }) => {
   const [indice, setIndice] = useState(0);
-  const [segundos, setSegundos] = useState(EJERCICIOS_DEFAULT[0].duracionSeg);
+  const [segundos, setSegundos] = useState(duracionEjercicioSeg);
   const [corriendo, setCorriendo] = useState(true);
   const [completado, setCompletado] = useState(false);
 
@@ -55,7 +57,7 @@ export const ReproductorPausaActiva: React.FC<ReproductorPausaActivaProps> = ({
     } else if (segundos === 0) {
       if (indice < EJERCICIOS_DEFAULT.length - 1) {
         setIndice((i) => i + 1);
-        setSegundos(EJERCICIOS_DEFAULT[indice + 1].duracionSeg);
+        setSegundos(duracionEjercicioSeg);
       } else {
         setCorriendo(false);
         setCompletado(true);
@@ -63,17 +65,17 @@ export const ReproductorPausaActiva: React.FC<ReproductorPausaActivaProps> = ({
       }
     }
     return () => clearInterval(t);
-  }, [corriendo, segundos, indice, onCompletada]);
+  }, [corriendo, segundos, indice, onCompletada, duracionEjercicioSeg]);
 
   const reiniciar = () => {
     setIndice(0);
-    setSegundos(EJERCICIOS_DEFAULT[0].duracionSeg);
+    setSegundos(duracionEjercicioSeg);
     setCorriendo(true);
     setCompletado(false);
   };
 
   const progreso = Math.round(
-    (((indice * 20) + (ejercicio.duracionSeg - segundos)) / (EJERCICIOS_DEFAULT.length * 20)) * 100
+    (((indice * duracionEjercicioSeg) + (duracionEjercicioSeg - segundos)) / (EJERCICIOS_DEFAULT.length * duracionEjercicioSeg)) * 100
   );
 
   return (

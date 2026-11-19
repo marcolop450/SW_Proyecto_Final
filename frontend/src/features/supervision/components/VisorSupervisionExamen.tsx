@@ -9,6 +9,7 @@ import { useModoEntrevista } from '../hooks/useModoEntrevista';
 import { ModalPreguntaEntrevista } from './ModalPreguntaEntrevista';
 import { api as clienteAxios } from '../../../api/client';
 import { io } from 'socket.io-client';
+import { usePosturaExamen } from '../hooks/usePosturaExamen';
 
 interface Props {
   sessionId: string;
@@ -28,6 +29,7 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
   const [camaraLista, setCamaraLista] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const errorPostura = usePosturaExamen(sessionId, videoRef, camaraLista);
   const detectorCelularRef = useRef(new DetectorSospechaCelular());
   const auditorRostrosRef = useRef(new AuditorPresenciaRostros());
   const animFrameRef = useRef<number | null>(null);
@@ -188,6 +190,7 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
           </div>
         </div>
 
+        {errorPostura && <span role="status" className="text-xs text-amber-300">{errorPostura}</span>}
         {infraccionActiva && (
           <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-rose-500/20 border border-rose-500 text-rose-300 text-xs font-semibold animate-pulse">
             <ShieldAlert className="w-4 h-4 text-rose-400" />

@@ -1,0 +1,3 @@
+- [x] Organizar el flujo en pasos y mostrar estados claros.
+- [x] Probar la cámara y gestionar errores de permisos.
+- [x] Retirar indicadores simulados.

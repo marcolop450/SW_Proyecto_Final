@@ -28,7 +28,7 @@ export const TarjetasMetricasTeletrabajo: React.FC<Props> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-        <span className="text-xs font-semibold text-slate-500">Tiempo en Foco Activo</span>
+        <span className="text-xs font-semibold text-slate-500">Actividad en esta página</span>
         <p className="text-2xl font-bold font-mono text-slate-900 mt-2">{formatoTiempo(tiempoActivoSeg)}</p>
         <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
           <CheckCircle className="w-3.5 h-3.5" />
@@ -62,12 +62,12 @@ export const TarjetasMetricasTeletrabajo: React.FC<Props> = ({
           }`} />
           <p className="text-xl font-bold text-slate-900">
             {enDescanso ? 'En Pausa' :
-             estadoPresencia === 'PRESENTE' ? 'Verificado' :
-             estadoPresencia === 'AUSENTE' ? 'Ausente' : 'Múltiples'}
+             estadoPresencia === 'PRESENTE' ? 'Detectada' :
+             estadoPresencia === 'AUSENTE' ? 'Ausente' : estadoPresencia === 'MULTIPLE' ? 'Múltiples' : estadoPresencia === 'REPOSO' ? 'Pausada' : 'No disponible'}
           </p>
         </div>
         <p className="text-[11px] text-slate-500 font-medium mt-1">
-          {enDescanso ? 'Cámara en reposo' : 'Evaluación continua en vivo'}
+          {enDescanso || estadoPresencia === 'REPOSO' ? 'Cámara en reposo' : estadoPresencia === 'NO_DISPONIBLE' ? 'Comprueba la cámara' : 'Detección de presencia en vivo'}
         </p>
       </div>
     </div>

@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Res } from '@nestjs/common';
+import { Response } from 'express';
+import { generarComprobanteJornada } from './services/comprobante-jornada.builder';
 import { SupervisionService } from './supervision.service';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { ConsentGuard } from '../../common/guards/consent.guard';
@@ -78,6 +80,25 @@ export class SupervisionController {
   @Get('sesiones/teletrabajo')
   async listarSesionesTeletrabajo(@CurrentUser() user: AuthenticatedUser) {
     return this.supervisionService.listarSesionesTeletrabajo(user.id, user.organizationId);
+  }
+
+  @Get('sesiones/teletrabajo/activa')
+  async obtenerJornadaActiva(@CurrentUser() user: AuthenticatedUser) {
+    return this.supervisionService.obtenerJornadaActiva(user.id, user.organizationId);
+  }
+
+  @Post('sesion/:id/teletrabajo/progreso')
+  async guardarProgreso(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: FinalizarSupervisionDto) {
+    return this.supervisionService.guardarProgresoTeletrabajo(id, user.id, user.organizationId, dto);
+  }
+
+  @Get('sesiones/teletrabajo/:id/comprobante')
+  async descargarComprobante(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Res() res: Response) {
+    const jornada = await this.supervisionService.obtenerComprobanteJornada(id, user.id, user.organizationId);
+    const archivo = await generarComprobanteJornada(jornada);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="jornada-${jornada.id.slice(0, 8)}.pdf"`);
+    res.end(archivo);
   }
 
   @Get('sesion/:id')

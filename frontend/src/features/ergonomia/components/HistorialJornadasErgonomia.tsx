@@ -51,16 +51,14 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
     const total = sesionesFiltradas.length;
     if (total === 0) return { promedioRula: 0, minutosTotales: 0, alertas: 0, total: 0 };
 
-    const sumaRula = sesionesFiltradas.reduce((acc, s) => acc + (s.averageRula || 1.0), 0);
-    const promedioRula = Number((sumaRula / total).toFixed(1));
+    const mediciones = sesionesFiltradas.map(s => s.averageRula).filter((valor): valor is number => typeof valor === 'number' && Number.isFinite(valor) && valor >= 1 && valor <= 7);
+    const promedioRula = mediciones.length ? Number((mediciones.reduce((a, b) => a + b, 0) / mediciones.length).toFixed(1)) : 0;
 
     let minutosTotales = 0;
     for (const s of sesionesFiltradas) {
       if (s.endTime && s.startTime) {
         const diffMs = new Date(s.endTime).getTime() - new Date(s.startTime).getTime();
-        minutosTotales += Math.max(1, Math.round(diffMs / 60000));
-      } else {
-        minutosTotales += 15;
+        if (Number.isFinite(diffMs) && diffMs >= 0) minutosTotales += Math.round(diffMs / 60000);
       }
     }
 
@@ -91,11 +89,13 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      <div><h2 className="text-lg font-bold text-slate-900">Tu historial</h2><p className="text-sm text-slate-500">Consulta tus sesiones y filtra los resultados por período.</p></div>
       {/* Filtros Temporales */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
           <button
             onClick={() => setFiltro('SEMANA')}
+            aria-pressed={filtro === 'SEMANA'}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               filtro === 'SEMANA' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -104,6 +104,7 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
           </button>
           <button
             onClick={() => setFiltro('MES')}
+            aria-pressed={filtro === 'MES'}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               filtro === 'MES' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -112,6 +113,7 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
           </button>
           <button
             onClick={() => setFiltro('TODAS')}
+            aria-pressed={filtro === 'TODAS'}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               filtro === 'TODAS' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -133,22 +135,22 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
       {/* Métricas Acumuladas del Período */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Promedio RULA</span>
+          <span className="text-xs font-semibold text-slate-500">Indicador de postura</span>
           <p className="text-2xl font-mono font-bold text-slate-900 mt-1">
             {kpis.promedioRula > 0 ? kpis.promedioRula.toFixed(1) : '--'}
           </p>
           <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">
-            {kpis.promedioRula <= 2.0 ? 'Óptimo (Nivel 1)' :
+            {kpis.promedioRula === 0 ? 'Sin mediciones' : kpis.promedioRula <= 2.0 ? 'Nivel bajo' :
              kpis.promedioRula <= 4.0 ? 'Aceptable (Nivel 2)' : 'Riesgo Postural'}
           </span>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Tiempo Monitoreado</span>
+          <span className="text-xs font-semibold text-slate-500">Duración registrada</span>
           <p className="text-2xl font-mono font-bold text-emerald-700 mt-1">
             {formatearTiempo(kpis.minutosTotales)}
           </p>
-          <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">acumulado período</span>
+          <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">solo sesiones finalizadas</span>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
@@ -164,7 +166,7 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
           <p className="text-2xl font-mono font-bold text-slate-900 mt-1">
             {kpis.total}
           </p>
-          <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">evaluaciones biomecánicas</span>
+          <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">sesiones del período</span>
         </div>
       </div>
 
@@ -174,7 +176,7 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-500" />
             <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-              Historial de Evaluaciones Biomecánicas
+              Tus sesiones
             </h3>
           </div>
           <span className="text-xs font-mono text-slate-500">
@@ -215,9 +217,9 @@ export const HistorialJornadasErgonomia: React.FC<Props> = ({
 
                   <div className="flex items-center gap-5 text-right w-full sm:w-auto justify-between sm:justify-end">
                     <div>
-                      <span className="text-[10px] uppercase font-mono text-slate-400 block">Riesgo RULA</span>
+                      <span className="text-[10px] uppercase font-mono text-slate-400 block">Indicador</span>
                       <span className="text-xs font-mono font-bold text-slate-900">
-                        {s.averageRula ? s.averageRula.toFixed(1) : '1.0'}
+                        {s.averageRula != null ? s.averageRula.toFixed(1) : '—'}
                       </span>
                     </div>
 

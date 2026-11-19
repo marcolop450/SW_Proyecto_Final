@@ -3,9 +3,12 @@ import { Play, Clock, Calendar, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   onIniciar: () => void;
+  deshabilitado?: boolean;
+  metaHoras: number;
+  onCambiarMeta: (horas: number) => void;
 }
 
-export const PanelInicioJornada: React.FC<Props> = ({ onIniciar }) => {
+export const PanelInicioJornada: React.FC<Props> = ({ onIniciar, deshabilitado, metaHoras, onCambiarMeta }) => {
   const [horaActual, setHoraActual] = useState('');
   const [fechaActual, setFechaActual] = useState('');
 
@@ -31,7 +34,7 @@ export const PanelInicioJornada: React.FC<Props> = ({ onIniciar }) => {
   }, []);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-6 animate-in fade-in duration-300">
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-8 text-center max-w-2xl mx-auto my-2 space-y-5 animate-in fade-in duration-300">
       <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center mx-auto shadow-xs">
         <Clock className="w-8 h-8" />
       </div>
@@ -82,9 +85,14 @@ export const PanelInicioJornada: React.FC<Props> = ({ onIniciar }) => {
       </div>
 
       <div className="pt-2">
+        <fieldset disabled={deshabilitado} className="mb-5">
+          <legend className="mx-auto mb-2 text-sm font-semibold text-slate-700">Elige tu meta de jornada</legend>
+          <div className="flex justify-center gap-2">{[4, 6, 8].map(horas => <label key={horas} className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold ${metaHoras === horas ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600'}`}><input type="radio" name="meta-jornada" value={horas} checked={metaHoras === horas} onChange={() => onCambiarMeta(horas)} className="mr-2 accent-emerald-700" />{horas} h</label>)}</div>
+        </fieldset>
         <button
           onClick={onIniciar}
-          className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm tracking-tight shadow-md hover:shadow-emerald-600/20 active:scale-98 transition-all cursor-pointer"
+          disabled={deshabilitado}
+          className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm tracking-tight shadow-md hover:shadow-emerald-600/20 active:scale-98 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Play className="w-4 h-4 fill-white" />
           <span>Iniciar Jornada de Teletrabajo</span>

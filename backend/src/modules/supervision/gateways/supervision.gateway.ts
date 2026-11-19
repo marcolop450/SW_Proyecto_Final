@@ -159,7 +159,7 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
 
   handleDisconnect(client: Socket) {
     const sessionId = client.data.sessionId;
-    if (sessionId && this.puestos.has(sessionId)) {
+    if (sessionId && sessionId === client.data?.sessionId && this.puestos.has(sessionId)) {
       const puesto = this.puestos.get(sessionId)!;
       puesto.estado = 'GRIS';
       puesto.motivoAlerta = 'Socket desconectado';
@@ -183,7 +183,7 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
   @SubscribeMessage('heartbeat')
   handleHeartbeat(client: Socket, payload?: { sessionId?: string }) {
     const sessionId = payload?.sessionId || client.data?.sessionId;
-    if (sessionId && this.puestos.has(sessionId)) {
+    if (sessionId && sessionId === client.data?.sessionId && this.puestos.has(sessionId)) {
       const puesto = this.puestos.get(sessionId)!;
       puesto.ultimoHeartbeat = Date.now();
       if (puesto.estado === 'GRIS') {
@@ -259,6 +259,7 @@ export class SupervisionGateway implements OnGatewayInit, OnGatewayConnection, O
     const puesto = this.puestos.get(sessionId);
     if (!puesto || puesto.organizationId !== organizationId) return;
     puesto.ultimoHeartbeat = Date.now();
+    if (tipo === 'MEDICION_POSTURA') return;
     const rula = Number(detalles?.rulaScore);
     if (Number.isFinite(rula)) puesto.rulaScore = rula;
     const pitch = Number(detalles?.pitchEfectivo ?? detalles?.pitch);

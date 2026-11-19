@@ -26,7 +26,7 @@ export const DirectorioClientesSuperAdmin: React.FC<Props> = ({ organizaciones }
           </div>
           <p className="text-2xl font-bold text-slate-900 font-mono">{organizaciones.length}</p>
           <span className="inline-block text-[11px] text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-            Tenants en Plataforma
+            Organizaciones registradas
           </span>
         </div>
 
@@ -57,17 +57,18 @@ export const DirectorioClientesSuperAdmin: React.FC<Props> = ({ organizaciones }
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Directorio Global Multi-Tenant</h3>
+            <h3 className="text-sm font-bold text-slate-900">Directorio de organizaciones</h3>
             <p className="text-xs text-slate-500">
-              Vista centralizada exclusiva para el Super Administrador de la plataforma
+              Consulta las empresas registradas en la plataforma
             </p>
           </div>
           <Insignia variante="marca">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Control Maestro</span>
+            <span>Administración</span>
           </Insignia>
         </div>
 
+        {organizaciones.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No hay organizaciones registradas.</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {organizaciones.map((org, idx) => {
             const plan = org.suscripciones?.[0];
@@ -85,10 +86,10 @@ export const DirectorioClientesSuperAdmin: React.FC<Props> = ({ organizaciones }
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-900 leading-snug">{org.nombre}</h4>
-                      <p className="text-[11px] font-mono text-slate-400">slug: {org.slug}</p>
+                      <p className="text-[11px] font-mono text-slate-400">{org.slug}</p>
                     </div>
                   </div>
-                  <Insignia variante="exito">Activo</Insignia>
+                  
                 </div>
 
                 <div className="space-y-1.5 text-xs text-slate-600 pt-1 border-t border-slate-100">
@@ -134,7 +135,7 @@ export const DirectorioClientesSuperAdmin: React.FC<Props> = ({ organizaciones }
                     <Calendar className="w-3 h-3" /> Alta: {new Date(org.creadoEn).toLocaleDateString()}
                   </span>
                   <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                    Tenant ID: {org.id.slice(0, 8)}...
+                    ID: {org.id.slice(0, 8)}...
                   </span>
                 </div>
               </div>

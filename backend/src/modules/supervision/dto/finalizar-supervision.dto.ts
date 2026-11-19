@@ -1,6 +1,10 @@
-import { IsNumber, IsOptional, IsInt, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsInt, Min, IsString, MaxLength } from 'class-validator';
 
 export class FinalizarSupervisionDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notaJornada?: string;
   @IsNumber()
   @IsOptional()
   scoreIntegridad?: number;

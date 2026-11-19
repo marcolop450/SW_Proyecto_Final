@@ -70,8 +70,8 @@ export function evaluarPresenciaFacial(
   const orejaDer = landmarks[8];
 
   const visNariz = nariz.visibility ?? 1;
-  const visOjoIzq = ojoIzq?.visibility ?? 1;
-  const visOjoDer = ojoDer?.visibility ?? 1;
+  const visOjoIzq = ojoIzq ? (ojoIzq.visibility ?? 1) : 0;
+  const visOjoDer = ojoDer ? (ojoDer.visibility ?? 1) : 0;
 
   const caraVisible = visNariz > 0.35 && (visOjoIzq > 0.3 || visOjoDer > 0.3);
   const ojosVisibles = visOjoIzq > 0.35 && visOjoDer > 0.35;
@@ -84,7 +84,7 @@ export function evaluarPresenciaFacial(
     landmarks[18],
     landmarks[19],
     landmarks[20],
-  ].filter(Boolean);
+  ].filter((punto) => punto && (punto.visibility ?? 1) > 0.5);
 
   // Comprobar si la mano se interpone delante del rostro (nariz u ojos)
   let manoTapaCara = false;

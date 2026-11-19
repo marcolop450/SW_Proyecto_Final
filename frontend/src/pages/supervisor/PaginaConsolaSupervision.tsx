@@ -17,6 +17,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { ConsolaMosaicoSemaforo } from '../../features/supervision/components/ConsolaMosaicoSemaforo';
+import { MedicionesPosturaSesion } from '../../features/supervision/components/MedicionesPosturaSesion';
 import { LineaTiempoIncidentes } from '../../features/supervision/components/LineaTiempoIncidentes';
 import { SelectorSesiones } from '../../features/supervision/components/SelectorSesiones';
 import { api } from '../../api/client';
@@ -471,6 +472,8 @@ export const PaginaConsolaSupervision: React.FC = () => {
               </div>
             </div>
           )}
+
+          {sessionIdAuditoria.trim() && <MedicionesPosturaSesion key={sessionIdAuditoria} sessionId={sessionIdAuditoria.trim()} />}
 
           {/* Línea de Tiempo de Incidentes Correlacionados */}
           {sessionIdAuditoria.trim() && (

@@ -16,6 +16,7 @@ export class ReporteErgonomicoExcelBuilder {
       ['Examen o actividad', datos.titulo], ['Estado', datos.estado], ['Identificador', datos.sessionId],
       ['Inicio', datos.inicio], ['Fin', datos.fin || 'En curso'], ['Generado', datos.generado],
       ['Eventos posturales registrados', datos.eventosErgonomicos.length],
+      ['Mediciones orientativas de postura', datos.muestrasPostura?.length ?? 0],
       ['Puntuación RULA promedio de eventos', datos.promedioRula == null ? 'Sin datos' : datos.promedioRula],
       ['Índice de bienestar del sistema', datos.scoreBienestar == null ? 'Sin datos' : `${datos.scoreBienestar} / 100`],
       ['Interpretación', 'El promedio se calcula solo con eventos que contienen un valor RULA válido; no representa el tiempo total ni una evaluación clínica.'],
@@ -28,6 +29,13 @@ export class ReporteErgonomicoExcelBuilder {
       datos.eventosErgonomicos.forEach((ev: any) => hoja.addRow([datos.formatearFecha(ev.timestamp), ev.tipo, ev.severidad, ev.detalles?.rulaScore ?? 'Sin datos', ev.detalles?.cuelloAngulo ?? 'Sin datos', ev.detalles?.troncoAngulo ?? 'Sin datos', ev.duracionMs == null ? 'Sin datos' : ev.duracionMs / 1000]));
       if (!datos.eventosErgonomicos.length) hoja.addRow(['No hay eventos posturales registrados.']);
       hoja.autoFilter = { from: 'A1', to: 'G1' };
+    }
+    if (datos.incluirEventos && datos.muestrasPostura?.length) {
+      const hoja = libro.addWorksheet('Mediciones de postura');
+      hoja.columns = [{width: 24}, {width: 22}, {width: 20}, {width: 20}];
+      cabecera(hoja, ['Fecha y hora', 'Indicador estimado / 7', 'Cuello estimado (°)', 'Tronco estimado (°)']);
+      datos.muestrasPostura.forEach((ev: any) => hoja.addRow([datos.formatearFecha(ev.timestamp), ev.detalles?.indicadorPostura ?? 'Sin datos', ev.detalles?.cuelloAngulo ?? 'Sin datos', ev.detalles?.troncoAngulo ?? 'Sin datos']));
+      hoja.addRow(['Estimaciones orientativas; no constituyen una evaluación RULA completa.']);
     }
     if (datos.incluirReferencia) {
       const hoja = libro.addWorksheet('Referencia RULA'); hoja.columns = [{width: 15}, {width: 80}];

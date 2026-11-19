@@ -1,220 +1,60 @@
 import React, { useState } from 'react';
-import { Camera, Mic, CheckCircle2, ShieldCheck, Video, Clock, Gauge, Play, RotateCw, Key } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, KeyRound, Play, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/ContextoAutenticacion';
 import { VisorSupervisionExamen } from '../supervision/components/VisorSupervisionExamen';
-import { api as clienteAxios } from '../../api/client';
+import { api } from '../../api/client';
+import { usePruebaCamara } from './hooks/usePruebaCamara';
 
 export const PaginaPortalPostulante: React.FC = () => {
   const { usuario, tieneConsentimiento } = useAuth();
-  const [camaraActiva, setCamaraActiva] = useState(false);
-  const [comprobando, setComprobando] = useState(false);
-  const [dispositivosListos, setDispositivosListos] = useState(false);
-
-  const [codigoAcceso, setCodigoAcceso] = useState('');
-  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
-  const [examen, setExamen] = useState<{ titulo: string; duracionMinutos: number; codigo: string } | null>(null);
+  const camara = usePruebaCamara();
+  const [codigo, setCodigo] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [examen, setExamen] = useState<{ titulo: string; duracionMinutos: number; codigo: string; urlExterna: string } | null>(null);
   const [consultando, setConsultando] = useState(false);
   const [iniciando, setIniciando] = useState(false);
-  const [sesionActiva, setSesionActiva] = useState<{ id: string; url: string; duracion: number } | null>(null);
-
-  const probarDispositivos = () => {
-    setComprobando(true);
-    setTimeout(() => {
-      setCamaraActiva(true);
-      setDispositivosListos(true);
-      setComprobando(false);
-    }, 1200);
-  };
-
-  const iniciarExamenSupervisado = async () => {
-    if (!examen || iniciando) return;
-    setErrorCodigo(null);
-    setIniciando(true);
+  const [sesion, setSesion] = useState<{ id: string; url: string; duracion: number } | null>(null);
+  const consultar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const valor = codigo.trim();
+    if (!valor || consultando) return;
+    setConsultando(true); setError(null); setExamen(null);
     try {
-      const res = await clienteAxios.post('/supervision/sesion/iniciar', {
-        codigoAcceso: codigoAcceso.trim(),
-        tipo: 'EXAMEN',
-      });
-      setSesionActiva({
-        id: res.data.id,
-        url: res.data.urlExterna || 'https://forms.google.com',
-        duracion: res.data.duracionMinutos || 60,
-      });
-    } catch (err: any) {
-      setErrorCodigo(err?.response?.data?.message || 'Código inválido o expirado.');
-    } finally {
-      setIniciando(false);
-    }
+      const res = await api.get(`/supervision/cuestionarios/codigo/${encodeURIComponent(valor)}`);
+      if (!res.data.urlExterna) { setError('Este examen no tiene un enlace disponible. Consulta con tu evaluador.'); return; }
+      setExamen({ titulo: res.data.titulo, duracionMinutos: res.data.duracionMinutos, urlExterna: res.data.urlExterna, codigo: valor });
+    } catch (err: any) { setError(err?.response?.data?.message || 'No se pudo encontrar el examen. Comprueba el código e inténtalo de nuevo.'); }
+    finally { setConsultando(false); }
   };
-
-  const consultarExamen = async () => {
-    const codigo = codigoAcceso.trim();
-    if (!codigo) { setErrorCodigo('Ingresa el código proporcionado por tu evaluador.'); return; }
-    setConsultando(true);
-    setErrorCodigo(null);
-    setExamen(null);
+  const iniciar = async () => {
+    if (!examen || !camara.lista || !tieneConsentimiento || iniciando) return;
+    setIniciando(true); setError(null);
     try {
-      const res = await clienteAxios.get(`/supervision/cuestionarios/codigo/${encodeURIComponent(codigo)}`);
-      setExamen({ titulo: res.data.titulo, duracionMinutos: res.data.duracionMinutos, codigo });
-    } catch (err: any) {
-      setErrorCodigo(err?.response?.data?.message || 'No se pudo consultar el examen.');
-    } finally { setConsultando(false); }
+      const res = await api.post('/supervision/sesion/iniciar', { codigoAcceso: examen.codigo, tipo: 'EXAMEN' });
+      camara.detener();
+      setSesion({ id: res.data.id, url: res.data.urlExterna || examen.urlExterna, duracion: res.data.duracionMinutos ?? examen.duracionMinutos });
+    } catch (err: any) { setError(err?.response?.data?.message || 'No se pudo iniciar el examen. Inténtalo de nuevo.'); }
+    finally { setIniciando(false); }
   };
-
-  if (sesionActiva) {
-    return (
-      <VisorSupervisionExamen
-        sessionId={sesionActiva.id}
-        urlExterna={sesionActiva.url}
-        duracionMinutos={sesionActiva.duracion}
-        onFinalizar={() => setSesionActiva(null)}
-      />
-    );
-  }
-
+  if (sesion) return <VisorSupervisionExamen sessionId={sesion.id} urlExterna={sesion.url} duracionMinutos={sesion.duracion} onFinalizar={() => setSesion(null)} />;
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-              Portal del Candidato
-            </span>
-            <span className="text-xs text-slate-500 font-mono">Convocatoria Activa</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">
-            Sala de Verificación Técnica y Evaluación
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            Bienvenido, {usuario?.nombre} {usuario?.apellido}. Realiza la comprobación antes de iniciar.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs font-mono text-slate-700">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Consentimiento {tieneConsentimiento ? 'Verificado' : 'Pendiente'}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Panel de Vista Previa de Cámara */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Video className="w-4 h-4 text-slate-700" />
-              <h2 className="text-sm font-bold text-slate-800">Calibración de Visión Artificial</h2>
-            </div>
-            <span className={`text-[11px] font-mono px-2 py-0.5 rounded-md border ${
-              camaraActiva ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>
-              {camaraActiva ? 'Sensor Calibrado' : 'Sensor No Iniciado'}
-            </span>
-          </div>
-
-          <div className="relative aspect-video w-full rounded-xl bg-slate-950 flex flex-col items-center justify-center overflow-hidden border border-slate-800">
-            {camaraActiva ? (
-              <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
-                <div className="absolute inset-0 bg-dot-grid opacity-20 pointer-events-none" />
-                <div className="relative w-44 h-44 rounded-full border-2 border-dashed border-[#C6F432]/70 flex items-center justify-center animate-pulse">
-                  <span className="text-[10px] font-mono text-[#C6F432] bg-slate-950/80 px-2 py-0.5 rounded">
-                    Zona Ergonómica y Foco
-                  </span>
-                </div>
-                <div className="absolute bottom-3 left-3 bg-slate-950/80 backdrop-blur-xs px-2.5 py-1 rounded-md text-[11px] font-mono text-emerald-400 flex items-center gap-2 border border-slate-800">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  Inferencia activa: 30 FPS • Privacidad local garantizada
-                </div>
-              </div>
-            ) : (
-              <div className="text-center p-6 space-y-3">
-                <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
-                  <Camera className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-200">Prueba tu cámara web</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                    Requerimos comprobar que tu ángulo y rostro permanezcan visibles para la supervisión.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={probarDispositivos}
-                  disabled={comprobando}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-                >
-                  {comprobando ? <RotateCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  {comprobando ? 'Comprobando hardware...' : 'Iniciar Prueba de Periféricos'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
-              <div className="flex items-center gap-2 text-slate-600">
-                <Camera className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-semibold">Cámara Web</span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-mono mt-1">{camaraActiva ? 'Operativa' : 'Pendiente'}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
-              <div className="flex items-center gap-2 text-slate-600">
-                <Mic className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-semibold">Micrófono</span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-mono mt-1">{dispositivosListos ? 'Calibrado' : 'Pendiente'}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
-              <div className="flex items-center gap-2 text-slate-600">
-                <Gauge className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-semibold">Latencia</span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-mono mt-1">{dispositivosListos ? '18ms (Óptimo)' : 'Pendiente'}</p>
-            </div>
-          </div>
-        </div>
-
+    <main className="space-y-5 pb-8">
+      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4">
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Portal del postulante</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Prepárate para tu examen</h1><p className="mt-1 text-sm text-slate-500">Hola, {usuario?.nombre}. Comprueba tu cámara y busca tu examen para comenzar.</p></div>
+        <span className={`inline-flex items-center gap-2 text-sm font-medium ${tieneConsentimiento ? 'text-emerald-700' : 'text-amber-700'}`}><ShieldCheck className="h-4 w-4" />Consentimiento {tieneConsentimiento ? 'vigente' : 'pendiente'}</span>
+      </header>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)] lg:items-start">
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs" aria-labelledby="camara-titulo">
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-semibold text-emerald-700">PASO 1</p><h2 id="camara-titulo" className="mt-1 text-lg font-bold text-slate-900">Comprueba tu cámara</h2><p className="mt-1 text-sm text-slate-500">Permite el acceso y comprueba que tu rostro se vea con claridad.</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${camara.lista ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{camara.lista ? 'Cámara disponible' : 'Pendiente'}</span></div>
+          <div className="relative mx-auto aspect-video max-h-80 overflow-hidden rounded-xl bg-slate-950"><video ref={camara.videoRef} playsInline muted className={`h-full w-full -scale-x-100 object-cover ${camara.lista ? '' : 'opacity-0'}`} />{!camara.lista && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-5 text-center text-slate-300"><Camera className="h-8 w-8 text-slate-400" /><p className="text-sm font-semibold">Tu vista previa aparecerá aquí</p><p className="text-xs text-slate-400">Enciende la cámara para comprobarla.</p></div>}</div>
+          {camara.error && <p role="alert" className="text-sm text-rose-700">{camara.error}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Busca buena luz y mantén tu rostro dentro de la imagen.</p><button type="button" onClick={camara.probar} disabled={camara.comprobando || !tieneConsentimiento} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{camara.comprobando ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}{camara.comprobando ? 'Comprobando…' : camara.lista ? 'Volver a comprobar' : 'Probar cámara'}</button></div>
+        </section>
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">Código de Acceso</h3>
-            <p className="text-xs text-slate-500">Ingresa el código proporcionado por tu evaluador:</p>
-            <div className="relative">
-              <Key className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                disabled={consultando || iniciando}
-                placeholder="Ej: EXAM-A1B2C3"
-                value={codigoAcceso}
-                onChange={(e) => { setCodigoAcceso(e.target.value.toUpperCase()); setExamen(null); setErrorCodigo(null); }}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
-              />
-            </div>
-            <button type="button" onClick={consultarExamen} disabled={consultando || !codigoAcceso.trim()} className="w-full rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{consultando ? 'Buscando examen...' : 'Buscar examen'}</button>
-            {errorCodigo && <p className="text-[11px] text-rose-600 font-medium">{errorCodigo}</p>}
-          </div>
-
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-slate-800 p-5 text-white shadow-2xs space-y-3">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C6F432]">Sala de Examen</span>
-            <div className="space-y-1 text-xs text-slate-200"><p>Postulante: <strong className="text-white">{usuario?.nombre} {usuario?.apellido}</strong></p><p>Cuenta: {usuario?.correo}</p><p>Examen: <strong className="text-white">{examen?.titulo || 'Busca tu examen con el código'}</strong></p>{examen && <p>Duración: {examen.duracionMinutos} minutos</p>}</div>
-            <p className="text-xs text-slate-300">La sesión y sus registros quedarán asociados a esta cuenta. Comprueba tu nombre antes de comenzar.</p>
-            <p className="text-xs text-slate-300">
-              Se activará pantalla completa forzada y supervisión biométrica local en RAM.
-            </p>
-            <button
-              type="button"
-              onClick={iniciarExamenSupervisado}
-              disabled={!dispositivosListos || !examen || iniciando || consultando}
-              className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                dispositivosListos && examen && !iniciando && !consultando ? 'bg-[#C6F432] text-slate-950 hover:bg-[#b8e42d] cursor-pointer' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              {iniciando ? 'Iniciando examen...' : !dispositivosListos ? 'Calibra periféricos primero' : !examen ? 'Busca tu examen primero' : 'Iniciar examen'}
-            </button>
-          </div>
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><p className="text-xs font-semibold text-emerald-700">PASO 2</p><h2 className="text-lg font-bold text-slate-900">Busca tu examen</h2><p className="text-sm text-slate-500">Ingresa el código que te proporcionó tu evaluador.</p><form onSubmit={consultar} className="space-y-3"><label htmlFor="codigo-examen" className="text-sm font-semibold text-slate-700">Código de acceso</label><div className="relative"><KeyRound className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input id="codigo-examen" value={codigo} onChange={e => { setCodigo(e.target.value.toUpperCase()); setExamen(null); setError(null); }} disabled={consultando || iniciando} placeholder="Ej.: EXAM-A1B2C3" className="w-full rounded-xl border border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></div><button disabled={consultando || !codigo.trim()} className="w-full rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{consultando ? 'Buscando…' : 'Buscar examen'}</button></form>{error && <p role="alert" className="text-sm text-rose-700">{error}</p>}</section>
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><div><p className="text-xs font-semibold text-emerald-700">PASO 3</p><h2 className="mt-1 text-lg font-bold text-slate-900">Revisa y comienza</h2></div><dl className="space-y-2 text-sm"><div><dt className="text-slate-500">Postulante</dt><dd className="font-semibold text-slate-900">{usuario?.nombre} {usuario?.apellido}</dd><dd className="break-all text-xs text-slate-500">{usuario?.correo}</dd></div><div><dt className="text-slate-500">Examen</dt><dd className="font-semibold text-slate-900">{examen?.titulo || 'Aún no seleccionado'}</dd></div>{examen && <div className="flex items-center gap-2 text-slate-600"><Clock className="h-4 w-4" />{examen.duracionMinutos} minutos</div>}</dl><p className="text-xs leading-relaxed text-slate-500">La sesión quedará asociada a esta cuenta. Comprueba tus datos antes de comenzar.</p><button type="button" onClick={iniciar} disabled={!camara.lista || !examen || !tieneConsentimiento || iniciando || consultando} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400"><Play className="h-4 w-4" />{iniciando ? 'Iniciando…' : 'Iniciar examen'}</button><p className="flex items-start gap-2 text-xs text-slate-500"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />{!tieneConsentimiento ? 'Necesitas un consentimiento vigente.' : !camara.lista ? 'Primero comprueba tu cámara.' : !examen ? 'Busca tu examen para continuar.' : 'Todo listo para comenzar.'}</p></section>
         </div>
       </div>
-    </div>
+    </main>
   );
 };

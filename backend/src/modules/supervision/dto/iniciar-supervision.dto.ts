@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIn, IsInt } from 'class-validator';
 
 export class IniciarSupervisionDto {
   @IsString()
@@ -8,4 +8,9 @@ export class IniciarSupervisionDto {
   @IsString()
   @IsOptional()
   tipo?: string; // EXAMEN | ENTREVISTA | TELETRABAJO
+
+  @IsOptional()
+  @IsInt()
+  @IsIn([4, 6, 8])
+  metaHoras?: number;
 }

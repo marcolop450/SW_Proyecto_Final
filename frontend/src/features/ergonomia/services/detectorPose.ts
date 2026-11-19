@@ -1,68 +1,48 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 let detectorInstancia: PoseLandmarker | null = null;
-let inicializando = false;
+let inicializacion: Promise<PoseLandmarker | null> | null = null;
+let generacion = 0;
 
-export async function obtenerDetectorPose(): Promise<PoseLandmarker | null> {
-  if (detectorInstancia) {
-    return detectorInstancia;
-  }
-
-  if (inicializando) {
-    let intentos = 0;
-    while (!detectorInstancia && intentos < 30) {
-      await new Promise((r) => setTimeout(r, 100));
-      intentos++;
-    }
-    return detectorInstancia;
-  }
-
-  inicializando = true;
-  try {
-    const vision = await FilesetResolver.forVisionTasks('/wasm');
-    detectorInstancia = await PoseLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: '/models/pose_landmarker_lite.task',
-        delegate: 'GPU',
-      },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-      minPoseDetectionConfidence: 0.5,
-      minPosePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-    return detectorInstancia;
-  } catch (errGpu) {
-    console.warn('MediaPipe GPU falló o no disponible, usando modo CPU:', errGpu);
+export function obtenerDetectorPose(): Promise<PoseLandmarker | null> {
+  if (detectorInstancia) return Promise.resolve(detectorInstancia);
+  if (inicializacion) return inicializacion;
+  const actual = generacion;
+  const tarea = (async () => {
     try {
       const vision = await FilesetResolver.forVisionTasks('/wasm');
-      detectorInstancia = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: '/models/pose_landmarker_lite.task',
-          delegate: 'CPU',
-        },
-        runningMode: 'VIDEO',
-        numPoses: 1,
-        minPoseDetectionConfidence: 0.35,
-        minPosePresenceConfidence: 0.35,
-        minTrackingConfidence: 0.35,
-      });
-      return detectorInstancia;
-    } catch (errCpu) {
-      console.error('Error al inicializar PoseLandmarker:', errCpu);
+      let detector: PoseLandmarker;
+      try {
+        detector = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: '/models/pose_landmarker_lite.task', delegate: 'GPU' },
+          runningMode: 'VIDEO', numPoses: 1,
+          minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+        });
+      } catch {
+        detector = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: '/models/pose_landmarker_lite.task', delegate: 'CPU' },
+          runningMode: 'VIDEO', numPoses: 1,
+          minPoseDetectionConfidence: 0.35, minPosePresenceConfidence: 0.35, minTrackingConfidence: 0.35,
+        });
+      }
+      if (actual !== generacion) { detector.close(); return null; }
+      detectorInstancia = detector;
+      return detector;
+    } catch (error) {
+      console.error('No se pudo iniciar el detector de postura', error);
       return null;
     }
-  } finally {
-    inicializando = false;
-  }
+  })();
+  inicializacion = tarea;
+  void tarea.finally(() => { if (inicializacion === tarea) inicializacion = null; });
+  return tarea;
 }
 
 export function reiniciarDetectorPose(): void {
+  generacion++;
+  inicializacion = null;
   if (detectorInstancia) {
-    try {
-      detectorInstancia.close();
-    } catch (_e) {}
+    try { detectorInstancia.close(); } catch { /* El detector ya estaba cerrado. */ }
     detectorInstancia = null;
   }
-  inicializando = false;
 }

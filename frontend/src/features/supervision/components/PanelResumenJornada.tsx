@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Clock, Coffee, Activity, RotateCcw } from 'lucide-react';
+import { CheckCircle, Clock, Coffee, Activity, RotateCcw, Download } from 'lucide-react';
 import { RegistroPausa } from './HistorialPausasTeletrabajo';
 
 interface Props {
@@ -10,6 +10,8 @@ interface Props {
   tiempoDescansoSeg: number;
   historialPausas: RegistroPausa[];
   onReiniciar: () => void;
+  onDescargar: () => void;
+  notaJornada?: string;
 }
 
 export const PanelResumenJornada: React.FC<Props> = ({
@@ -19,6 +21,8 @@ export const PanelResumenJornada: React.FC<Props> = ({
   tiempoDescansoSeg,
   historialPausas,
   onReiniciar,
+  onDescargar,
+  notaJornada,
 }) => {
   const formatoTiempo = (segsTotales: number) => {
     const horas = Math.floor(segsTotales / 3600);
@@ -68,7 +72,7 @@ export const PanelResumenJornada: React.FC<Props> = ({
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
             <Activity className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Foco Activo</span>
+            <span>Actividad en la página</span>
           </div>
           <p className="text-lg font-mono font-bold text-emerald-700 mt-1">
             {formatoTiempo(tiempoActivoSeg)}
@@ -86,7 +90,9 @@ export const PanelResumenJornada: React.FC<Props> = ({
         </div>
       </div>
 
+      {notaJornada?.trim() && <div className="rounded-xl bg-slate-50 p-4 text-left"><p className="text-xs font-semibold text-slate-500">Nota del día</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{notaJornada}</p></div>}
       <div className="pt-2">
+        <button type="button" onClick={onDescargar} className="mr-2 mb-2 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"><Download className="w-4 h-4"/>Descargar comprobante PDF</button>
         <button
           onClick={onReiniciar}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs tracking-tight shadow-sm active:scale-98 transition-all cursor-pointer"

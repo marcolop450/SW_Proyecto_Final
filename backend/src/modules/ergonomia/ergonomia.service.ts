@@ -13,7 +13,6 @@ export class ErgonomiaService {
       data: {
         userId,
         startTime: new Date(),
-        averageRula: 1.0,
         totalAlerts: 0,
       },
     });
@@ -34,7 +33,7 @@ export class ErgonomiaService {
       throw new NotFoundException('Sesión ergonómica no encontrada o no autorizada.');
     }
 
-    const prevRula = sesion.averageRula || dto.rulaScore;
+    const prevRula = sesion.averageRula ?? dto.rulaScore;
     const nuevoPromedio = Number(((prevRula * 0.95) + (dto.rulaScore * 0.05)).toFixed(2));
     const incrementaAlerta = dto.rulaScore >= 5 || dto.staticLoad;
 
@@ -104,11 +103,13 @@ export class ErgonomiaService {
       };
     }
 
-    const sumaRula = sesiones.reduce((acc, s) => acc + (s.averageRula || 0), 0);
-    const promedioRula = Number((sumaRula / totalSesiones).toFixed(1));
+    const conMediciones = sesiones.filter(s => s.averageRula != null);
+    const sumaRula = conMediciones.reduce((acc, s) => acc + (s.averageRula ?? 0), 0);
+    const promedioRula = conMediciones.length ? Number((sumaRula / conMediciones.length).toFixed(1)) : 0;
 
     let clasificacionRula = 'Bajo Riesgo';
-    if (promedioRula <= 2.0) clasificacionRula = 'Riesgo Despreciable (Óptimo)';
+    if (!conMediciones.length) clasificacionRula = 'Sin mediciones previas';
+    else if (promedioRula <= 2.0) clasificacionRula = 'Riesgo Despreciable (Óptimo)';
     else if (promedioRula <= 4.0) clasificacionRula = 'Bajo Riesgo (Aceptable)';
     else if (promedioRula <= 6.0) clasificacionRula = 'Riesgo Medio (Ajustar Puesto)';
     else clasificacionRula = 'Alto Riesgo (Intervención)';
@@ -117,9 +118,7 @@ export class ErgonomiaService {
     for (const s of sesiones) {
       if (s.endTime && s.startTime) {
         const diffMs = new Date(s.endTime).getTime() - new Date(s.startTime).getTime();
-        minutosMonitoreados += Math.max(1, Math.round(diffMs / 60000));
-      } else {
-        minutosMonitoreados += 15;
+        minutosMonitoreados += Math.max(0, Math.round(diffMs / 60000));
       }
     }
 

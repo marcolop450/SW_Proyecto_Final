@@ -33,16 +33,16 @@ export const BadgeEstadoCalibracion: React.FC<Props> = ({ estado }) => {
       {(estado === 'DESVIADO_IZQ' || estado === 'DESVIADO_DER') && <UserCheck className="w-4 h-4 text-white" />}
       <span className="font-semibold">
         {estado === 'CENTRADO'
-          ? 'Rostro y Vista Centrados'
+          ? 'Bien ubicado'
           : estado === 'MANO_TAPA_CARA'
           ? 'Rostro cubierto con la mano'
           : estado === 'CAMARA_TAPADA'
-          ? 'Cámara tapada u obstruida'
+          ? 'Revisa la cámara y la luz'
           : estado === 'SIN_PERSONA'
-          ? 'Sin Persona / Vista Oculta'
+          ? 'No te vemos todavía'
           : estado === 'DESVIADO_IZQ'
-          ? 'Centra tu cuerpo a la derecha'
-          : 'Centra tu cuerpo a la izquierda'}
+          ? 'Acércate al centro'
+          : 'Acércate al centro'}
       </span>
     </div>
   );

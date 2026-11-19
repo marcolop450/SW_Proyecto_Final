@@ -94,6 +94,10 @@ export class SupervisionService {
     let questionnaireId: string | null = null;
     let tipo = dto.tipo || 'EXAMEN';
 
+    if (dto.codigoAcceso === 'TELETRABAJO' && await this.obtenerJornadaActiva(userId, organizacionId)) {
+      throw new BadRequestException('Ya tienes una jornada activa. Recupérala antes de iniciar otra.');
+    }
+
     if (dto.codigoAcceso && dto.codigoAcceso !== 'TELETRABAJO') {
       const q = await this.validarCodigo(dto.codigoAcceso, organizacionId);
       questionnaireId = q.id;
@@ -108,8 +112,9 @@ export class SupervisionService {
         tipo,
         estado: 'EN_PROGRESO',
         inicio: new Date(),
-        scoreIntegridad: 100.0,
+        scoreIntegridad: tipo === 'TELETRABAJO' ? null : 100.0,
         totalIncidentes: 0,
+        ...(tipo === 'TELETRABAJO' ? { eventosConducta: { create: { userId, tipo: 'JORNADA_CONFIGURACION', severidad: 'LOW', detalles: { metaHoras: dto.metaHoras || 8 } } } } : {}),
       },
       include: {
         questionnaire: true,
@@ -142,7 +147,7 @@ export class SupervisionService {
 
   async registrarEvento(sessionId: string, userId: string, dto: EventoConductaDto) {
     const sesion = await this.prisma.supervisionSession.findFirst({
-      where: { id: sessionId, userId },
+      where: { id: sessionId, userId, estado: 'EN_PROGRESO' },
     });
 
     if (!sesion) {
@@ -161,10 +166,6 @@ export class SupervisionService {
       },
     });
 
-    await this.prisma.supervisionSession.update({
-      where: { id: sessionId },
-      data: { totalIncidentes: { increment: 1 } },
-    });
     this.gateway.registrarTelemetria(sessionId, sesion.organizationId, evento.tipo, dto.detalles || {});
 
     return { registrado: true, eventoId: evento.id, tipo: evento.tipo };
@@ -220,7 +221,7 @@ export class SupervisionService {
 
   async finalizarSesion(sessionId: string, userId: string, dto: FinalizarSupervisionDto) {
     const sesion = await this.prisma.supervisionSession.findFirst({
-      where: { id: sessionId, userId },
+      where: { id: sessionId, userId, estado: 'EN_PROGRESO' },
       include: { eventosConducta: true },
     });
 
@@ -245,10 +246,11 @@ export class SupervisionService {
       data: {
         estado: 'FINALIZADA',
         fin: new Date(),
-        scoreIntegridad: score,
+        scoreIntegridad: sesion.tipo === 'TELETRABAJO' ? null : score,
         tiempoActivoSeg: dto.tiempoActivoSeg || 0,
         tiempoOciosoSeg: dto.tiempoOciosoSeg || 0,
         tiempoFueraSeg: dto.tiempoFueraSeg || 0,
+        ...(sesion.tipo === 'TELETRABAJO' && dto.notaJornada?.trim() ? { eventosConducta: { create: { userId, tipo: 'JORNADA_NOTAS', severidad: 'LOW', detalles: { nota: dto.notaJornada.trim() } } } } : {}),
       },
     });
     this.gateway.finalizarSesion(sessionId);
@@ -272,7 +274,32 @@ export class SupervisionService {
     return this.prisma.supervisionSession.findMany({
       where: { userId, organizationId, tipo: 'TELETRABAJO' },
       orderBy: { inicio: 'desc' },
-      take: 50,
     });
+  }
+
+  async obtenerJornadaActiva(userId: string, organizationId: string) {
+    return this.prisma.supervisionSession.findFirst({
+      where: { userId, organizationId, tipo: 'TELETRABAJO', estado: 'EN_PROGRESO' },
+      orderBy: { inicio: 'desc' },
+      include: { eventosConducta: { where: { tipo: { in: ['PAUSA_DESCANSO', 'JORNADA_CONFIGURACION'] } }, orderBy: { timestamp: 'desc' } } },
+    });
+  }
+
+  async obtenerComprobanteJornada(id: string, userId: string, organizationId: string) {
+    const sesion = await this.prisma.supervisionSession.findFirst({
+      where: { id, userId, organizationId, tipo: 'TELETRABAJO', estado: 'FINALIZADA', fin: { not: null } },
+      include: { usuario: true, organizacion: true, eventosConducta: { where: { tipo: { in: ['PAUSA_DESCANSO', 'JORNADA_CONFIGURACION', 'JORNADA_NOTAS'] } }, orderBy: { timestamp: 'asc' } } },
+    });
+    if (!sesion) throw new NotFoundException('Jornada finalizada no encontrada.');
+    return sesion;
+  }
+
+  async guardarProgresoTeletrabajo(id: string, userId: string, organizationId: string, dto: FinalizarSupervisionDto) {
+    const resultado = await this.prisma.supervisionSession.updateMany({
+      where: { id, userId, organizationId, tipo: 'TELETRABAJO', estado: 'EN_PROGRESO' },
+      data: { tiempoActivoSeg: dto.tiempoActivoSeg, tiempoOciosoSeg: dto.tiempoOciosoSeg, tiempoFueraSeg: dto.tiempoFueraSeg },
+    });
+    if (!resultado.count) throw new NotFoundException('Jornada activa no encontrada.');
+    return { guardado: true };
   }
 }

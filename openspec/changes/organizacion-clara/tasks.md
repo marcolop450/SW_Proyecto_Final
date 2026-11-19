@@ -1,0 +1,2 @@
+- [x] Mejorar presentación y búsqueda de departamentos.
+- [x] Evitar estados predeterminados engañosos y validar nombres vacíos.

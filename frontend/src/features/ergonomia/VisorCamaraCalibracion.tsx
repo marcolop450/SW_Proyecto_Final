@@ -1,17 +1,18 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, RotateCw, Play, X } from 'lucide-react';
+import { AlertTriangle, RotateCw, Play, X, Camera, CheckCircle2 } from 'lucide-react';
 import { Boton } from '../../components/ui/Boton';
 import { BaselineCalibracion } from './types/ergonomia.types';
 import { obtenerDetectorPose, reiniciarDetectorPose } from './services/detectorPose';
 import { evaluarPresenciaFacial, evaluarLuminanciaVideo, DiagnosticoFacial } from './utils/detectorFacialOclusion';
+import { calcularAngulosDesdeLandmarks } from './utils/calculadorAngulosPose';
+import { calcularReferencia, type MuestraCalibracion } from './utils/calibracionPostura';
 import { dibujarReticulaFacialDinamica } from './utils/dibujadorReticulaFacial';
 import { BadgeEstadoCalibracion, EstadoAlineacion } from './components/BadgeEstadoCalibracion';
-
+import { InstruccionesCalibracion } from './components/InstruccionesCalibracion';
 interface Props {
   alFinalizarCalibracion: (baseline: BaselineCalibracion) => void;
   alCancelar?: () => void;
 }
-
 export const VisorCamaraCalibracion: React.FC<Props> = ({
   alFinalizarCalibracion,
   alCancelar,
@@ -19,17 +20,25 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
   const [camaraIniciada, setCamaraIniciada] = useState(false);
   const [errorCamara, setErrorCamara] = useState<string | null>(null);
-  const [luminancia, setLuminancia] = useState<number>(128);
+  const [errorDetector, setErrorDetector] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [estadoAlineacion, setEstadoAlineacion] = useState<EstadoAlineacion>('SIN_PERSONA');
   const [calibrando, setCalibrando] = useState(false);
   const [segundosRestantes, setSegundosRestantes] = useState(3);
   const ultimaInferenciaRef = useRef<number>(0);
-
+  const montadoRef = useRef(false);
+  const conteoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alineacionRef = useRef<EstadoAlineacion>('SIN_PERSONA');
+  const muestrasRef = useRef<MuestraCalibracion[] | null>(null);
+  const ultimaMuestraRef = useRef(0);
+  const deteccionInterrumpidaRef = useRef(false);
+  const solicitudRef = useRef(0);
   const iniciarCamara = useCallback(async () => {
+    const solicitud = ++solicitudRef.current;
     setErrorCamara(null);
+    setCamaraIniciada(false);
     let stream: MediaStream | null = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -40,6 +49,7 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       } catch (err: any) {
+        if (!montadoRef.current || solicitud !== solicitudRef.current) return;
         setErrorCamara(
           err.name === 'NotAllowedError'
             ? 'Permiso de cámara denegado. Permite el acceso en el navegador.'
@@ -48,11 +58,18 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
         return;
       }
     }
-
     if (!stream) return;
+    if (!montadoRef.current || solicitud !== solicitudRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = stream;
     setCamaraIniciada(true);
-
+    stream.getVideoTracks().forEach(track => { track.onended = () => {
+      if (!montadoRef.current || solicitud !== solicitudRef.current) return;
+      alineacionRef.current = 'SIN_PERSONA';
+      setEstadoAlineacion('SIN_PERSONA');
+      setCamaraIniciada(false);
+      setErrorCamara('La cámara se desconectó. Comprueba la conexión y vuelve a intentarlo.');
+    }; });
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       videoRef.current.onloadedmetadata = () => {
@@ -60,39 +77,38 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
       };
     }
   }, []);
-
   useEffect(() => {
+    montadoRef.current = true;
     iniciarCamara();
     return () => {
+      montadoRef.current = false;
+      solicitudRef.current++;
+      if (conteoRef.current) clearInterval(conteoRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
       reiniciarDetectorPose();
     };
   }, [iniciarCamara]);
-
   // Análisis facial dinámico y de oclusión con MediaPipe en tiempo real
   useEffect(() => {
     if (!camaraIniciada) return;
     let cancelado = false;
-
+    let procesando = false;
     const intervalo = setInterval(async () => {
       const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.videoWidth === 0 || cancelado) return;
-
+      if (!video || video.readyState < 2 || video.videoWidth === 0 || cancelado || procesando) return;
+      procesando = true;
       const ahora = performance.now();
       const timestampMs = Math.max(ahora, (ultimaInferenciaRef.current || 0) + 1);
       ultimaInferenciaRef.current = timestampMs;
-
       try {
         const lum = evaluarLuminanciaVideo(video);
-        setLuminancia(lum);
-
         const detector = await obtenerDetectorPose();
-        if (!detector || cancelado) return;
-
+        if (cancelado) return;
+        if (!detector) { setErrorDetector(true); alineacionRef.current = 'SIN_PERSONA'; setEstadoAlineacion('SIN_PERSONA'); return; }
+        setErrorDetector(false);
         const resultado = detector.detectForVideo(video, timestampMs);
         const lm = resultado?.landmarks?.[0] || null;
         const diag: DiagnosticoFacial = evaluarPresenciaFacial(lm, lum);
-
         let nuevoEstado: EstadoAlineacion = 'SIN_PERSONA';
         if (diag.camaraTapada) {
           nuevoEstado = 'CAMARA_TAPADA';
@@ -103,7 +119,7 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
         } else {
           const hombroIzq = lm[11];
           const hombroDer = lm[12];
-          if (!hombroIzq || !hombroDer) {
+          if (!hombroIzq || !hombroDer || (hombroIzq.visibility ?? 1) < 0.35 || (hombroDer.visibility ?? 1) < 0.35 || !diag.caraVisible) {
             nuevoEstado = 'SIN_PERSONA';
           } else {
             const centroX = (hombroIzq.x + hombroDer.x) / 2;
@@ -116,116 +132,114 @@ export const VisorCamaraCalibracion: React.FC<Props> = ({
             }
           }
         }
+        if (muestrasRef.current && nuevoEstado !== 'CENTRADO') deteccionInterrumpidaRef.current = true;
+        alineacionRef.current = nuevoEstado;
         setEstadoAlineacion(nuevoEstado);
-
+        if (muestrasRef.current && nuevoEstado === 'CENTRADO' && lm) {
+          const angulos = calcularAngulosDesdeLandmarks(lm);
+          if (angulos) {
+            muestrasRef.current.push({ ...angulos, luminancia: lum });
+            ultimaMuestraRef.current = performance.now();
+          }
+        }
         if (canvasRef.current) {
           dibujarReticulaFacialDinamica(canvasRef.current, diag, nuevoEstado === 'CENTRADO');
         }
       } catch (err) {
+        alineacionRef.current = 'SIN_PERSONA';
+        setEstadoAlineacion('SIN_PERSONA');
         console.warn('Recuperando detector en calibración:', err);
+        setErrorDetector(true);
         reiniciarDetectorPose();
+      } finally {
+        procesando = false;
       }
     }, 220);
-
     return () => {
       cancelado = true;
       clearInterval(intervalo);
     };
   }, [camaraIniciada]);
-
   const iniciarConteoCalibracion = () => {
+    setAviso(null);
+    muestrasRef.current = [];
+    deteccionInterrumpidaRef.current = false;
+    ultimaMuestraRef.current = performance.now();
     setCalibrando(true);
     setSegundosRestantes(3);
-
     let sec = 3;
-    const timer = setInterval(() => {
+    conteoRef.current = setInterval(() => {
+      if (deteccionInterrumpidaRef.current || alineacionRef.current !== 'CENTRADO' || performance.now() - ultimaMuestraRef.current > 900) {
+        if (conteoRef.current) clearInterval(conteoRef.current);
+        conteoRef.current = null;
+        muestrasRef.current = null;
+        setCalibrando(false);
+        setAviso('Se perdió la detección durante la preparación. Vuelve a colocarte y prueba otra vez.');
+        return;
+      }
       sec -= 1;
       setSegundosRestantes(sec);
       if (sec <= 0) {
-        clearInterval(timer);
-        if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
-        reiniciarDetectorPose();
-        alFinalizarCalibracion({
-          anguloCuelloBase: 12.0,
-          anguloTroncoBase: 8.0,
-          inclinacionHombrosBase: 0,
-          luminanciaPromedio: luminancia,
-          calibradoEn: new Date().toISOString(),
-        });
+        if (conteoRef.current) clearInterval(conteoRef.current);
+        conteoRef.current = null;
+        const referencia = calcularReferencia(muestrasRef.current || []);
+        muestrasRef.current = null;
+        if (!referencia) {
+          setCalibrando(false);
+          setAviso('No se obtuvieron suficientes mediciones. Comprueba la cámara y vuelve a intentarlo.');
+          return;
+        }
+        alFinalizarCalibracion(referencia);
       }
     }, 1000);
   };
-
+  const mensajeEstado = !camaraIniciada
+    ? 'Activa la cámara para comenzar.'
+    : estadoAlineacion === 'CENTRADO'
+    ? 'Todo listo. Mantén esta posición y comienza la preparación.'
+    : estadoAlineacion === 'CAMARA_TAPADA'
+    ? 'Revisa que la cámara esté descubierta y que haya suficiente luz.'
+    : estadoAlineacion === 'MANO_TAPA_CARA'
+    ? 'Deja tu rostro descubierto para que la cámara pueda verlo.'
+    : estadoAlineacion === 'SIN_PERSONA'
+    ? 'Ubícate frente a la cámara y asegúrate de que se vean tu rostro y hombros.'
+    : 'Muévete suavemente hasta quedar en el centro de la imagen.';
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl p-6 space-y-5 max-w-xl mx-auto">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+    <section className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
         <div>
-          <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-700 font-semibold block">
-            Alineación Facial y Postural
-          </span>
-          <h2 className="text-base font-bold text-slate-900">Calibración de Postura Neutra</h2>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Antes de comenzar</p>
+          <h2 className="mt-1 text-xl font-bold text-slate-900">Prepara tu cámara y postura</h2>
+          <p className="mt-1 text-sm text-slate-500">Te ayudamos a colocarte para iniciar tu sesión.</p>
         </div>
-        {alCancelar && (
-          <button onClick={alCancelar} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
-        )}
+        {alCancelar && <button type="button" onClick={alCancelar} aria-label="Cerrar preparación" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>}
+      </header>
+      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,1fr)] lg:items-start">
+        <div className="space-y-3">
+          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
+            <video ref={videoRef} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
+            <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100" />
+            {camaraIniciada && !errorCamara && <BadgeEstadoCalibracion estado={estadoAlineacion} />}
+            {!camaraIniciada && !errorCamara && <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">Preparando la cámara…</div>}
+            {errorCamara && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-5 text-center text-sm text-white"><AlertTriangle className="h-7 w-7 text-amber-400" /><strong>No se pudo activar la cámara</strong><p className="text-slate-300">{errorCamara}</p><button type="button" onClick={iniciarCamara} className="mt-2 rounded-lg bg-white px-4 py-2 font-semibold text-slate-900 hover:bg-slate-100">Intentar de nuevo</button></div>}
+            {calibrando && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 text-white"><span className="text-6xl font-bold text-emerald-400">{segundosRestantes}</span><p className="text-sm">Mantén tu posición unos segundos</p></div>}
+          </div>
+          {errorDetector && <p role="status" className="text-sm text-amber-700">No se pudo iniciar la detección de postura. Comprueba la conexión y vuelve a intentarlo; se reintentará automáticamente.</p>}
+          {aviso && <p role="status" className="text-sm text-amber-700">{aviso}</p>}
+          <div aria-live="polite" className={`flex items-start gap-2 text-sm ${estadoAlineacion === 'CENTRADO' && camaraIniciada ? 'text-emerald-700' : 'text-slate-600'}`}>
+            {estadoAlineacion === 'CENTRADO' && camaraIniciada ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <Camera className="mt-0.5 h-4 w-4 shrink-0" />}
+            <span>{mensajeEstado}</span>
+          </div>
+        </div>
+        <InstruccionesCalibracion />
       </div>
-
-      {errorCamara ? (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
-          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold">Error de Dispositivo</p>
-            <p className="mt-0.5">{errorCamara}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="relative aspect-4/3 rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center">
-          <video ref={videoRef} playsInline muted className="w-full h-full object-cover -scale-x-100" />
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none -scale-x-100" />
-
-          <BadgeEstadoCalibracion estado={estadoAlineacion} />
-
-          {calibrando && (
-            <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-2">
-              <span className="text-6xl font-mono font-black text-emerald-400 scale-105 transition-transform duration-300">
-                {segundosRestantes}
-              </span>
-              <p className="text-xs font-medium tracking-wide text-slate-300">
-                Capturando baseline neutro...
-              </p>
-            </div>
-          )}
-
-          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded bg-slate-900/80 text-[10px] text-slate-300 font-mono">
-            Tracking Facial y Biometría Local (0 KB)
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-end gap-3 pt-2">
-        {alCancelar && (
-          <Boton variante="secundario" className="py-1.5 px-3 text-xs" onClick={alCancelar}>
-            Cancelar
-          </Boton>
-        )}
-        <Boton
-          variante="primario"
-          className="py-1.5 px-3 text-xs"
-          disabled={!camaraIniciada || calibrando || !!errorCamara || estadoAlineacion !== 'CENTRADO'}
-          onClick={iniciarConteoCalibracion}
-        >
-          {calibrando ? <RotateCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
-          <span>
-            {calibrando
-              ? `Calibrando (${segundosRestantes}s)...`
-              : estadoAlineacion === 'CENTRADO'
-              ? 'Iniciar Calibración (3s)'
-              : 'Alinea tu rostro y vista para calibrar'}
-          </span>
+      <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-5 py-4 sm:px-6">
+        {alCancelar && <Boton variante="secundario" onClick={alCancelar}>Cancelar</Boton>}
+        <Boton variante="primario" disabled={!camaraIniciada || calibrando || !!errorCamara || estadoAlineacion !== 'CENTRADO'} onClick={iniciarConteoCalibracion}>
+          {calibrando ? <RotateCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Play className="mr-1.5 h-4 w-4" />}
+          {calibrando ? `Preparando (${segundosRestantes} s)` : 'Iniciar preparación'}
         </Boton>
-      </div>
-    </div>
+      </footer>
+    </section>
   );
 };

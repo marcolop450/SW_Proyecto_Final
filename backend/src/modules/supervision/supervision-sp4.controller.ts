@@ -56,6 +56,16 @@ export class SupervisionSp4Controller {
     return sesion;
   }
 
+  @Get('sesiones/:sessionId/postura')
+  async obtenerPostura(@Param('sessionId') sessionId: string, @CurrentUser() user: AuthenticatedUser) {
+    await this.verificarSesion(sessionId, user);
+    return this.prisma.behaviorEvent.findMany({
+      where: { sessionId, tipo: 'MEDICION_POSTURA' },
+      select: { id: true, timestamp: true, detalles: true },
+      orderBy: { timestamp: 'desc' }, take: 500,
+    });
+  }
+
   @Get('puestos-en-vivo')
   @ApiOperation({ summary: 'CU21 – Consultar puestos de monitoreo en tiempo real' })
   async listarPuestosEnVivo(@CurrentUser() user: AuthenticatedUser) {
@@ -299,6 +309,7 @@ export class SupervisionSp4Controller {
       (e) => e.tipo === 'POSTURA_FORZADA' || (e.detalles as any)?.rulaScore,
     );
 
+    const muestrasPostura = session.eventosConducta.filter(e => e.tipo === 'MEDICION_POSTURA');
     const valoresRula = evsErgonomicos.map(e => (e.detalles as any)?.rulaScore).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 7);
     const promedioRula = valoresRula.length ? Math.round(valoresRula.reduce((a, b) => a + b, 0) / valoresRula.length * 100) / 100 : null;
 
@@ -322,6 +333,7 @@ export class SupervisionSp4Controller {
       promedioRula,
       scoreBienestar: indices.indiceBienestar,
       eventosErgonomicos: evsErgonomicos,
+      muestrasPostura,
     });
 
     // Registrar en bitácora inmutable WORM (CU26 - RF50: Accesos a datos)

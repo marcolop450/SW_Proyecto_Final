@@ -1,0 +1,3 @@
+- [x] Registrar mediciones de postura durante exámenes.
+- [x] Mostrar las mediciones de la sesión seleccionada y exportarlas a Excel.
+- [ ] Validar con cámara y examen reales.

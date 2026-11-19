@@ -383,7 +383,7 @@ export class MotorCorrelacionService {
 
     const indiceIntegridad = Math.max(0, 100 - deducciones);
 
-    const eventos = session.eventosConducta || [];
+    const eventos = (session.eventosConducta || []).filter(e => e.tipo !== 'MEDICION_POSTURA');
     const eventosFatiga = eventos.filter(
       (e) => e.tipo === 'GAZE_DOWN_SUSTAINED' || e.tipo === 'FACE_ABSENT',
     ).length;

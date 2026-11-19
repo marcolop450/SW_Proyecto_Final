@@ -20,9 +20,10 @@ export const ModalNuevoDepartamento: React.FC<Props> = ({ abierto, alCerrar, alC
 
   const manejarEnvio = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!nombre.trim()) return;
     setCargando(true);
     try {
-      await api.post('/organizaciones/departamentos', { nombre, descripcion });
+      await api.post('/organizaciones/departamentos', { nombre: nombre.trim(), descripcion: descripcion.trim() });
       mostrarExito('Departamento creado exitosamente.', 'Organización');
       setNombre('');
       setDescripcion('');
@@ -55,7 +56,7 @@ export const ModalNuevoDepartamento: React.FC<Props> = ({ abierto, alCerrar, alC
           <Boton type="button" variante="secundario" onClick={alCerrar}>
             Cancelar
           </Boton>
-          <Boton type="submit" cargando={cargando} icono={Plus}>
+          <Boton type="submit" disabled={!nombre.trim()} cargando={cargando} icono={Plus}>
             Crear Departamento
           </Boton>
         </div>
