@@ -1,7 +1,7 @@
 # ==========================================
 # ETAPA 1: Construcción del Frontend (Builder)
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 

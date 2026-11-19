@@ -1,12 +1,14 @@
 # ==========================================
 # ETAPA 1: Construcción y Compilación (Builder)
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
 # Instalar dependencias del sistema requeridas para Prisma y compilación
-RUN apk add --no-cache openssl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar manifiestos y esquema de base de datos
 COPY package*.json ./
@@ -21,17 +23,19 @@ COPY . .
 RUN npm run build
 
 # Purgar dependencias de desarrollo conservando cliente Prisma generado
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # ==========================================
 # ETAPA 2: Entorno de Ejecución (Runner)
 # ==========================================
-FROM node:20-alpine AS runner
+FROM node:24-bookworm-slim AS runner
 
 WORKDIR /app
 
 # Dependencias mínimas de sistema para producción
-RUN apk add --no-cache openssl dumb-init
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl dumb-init \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000
