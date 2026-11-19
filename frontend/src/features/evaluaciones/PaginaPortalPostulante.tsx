@@ -1,18 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Camera, Mic, CheckCircle2, ShieldCheck, Video, Clock, Gauge, Play, RotateCw, Key } from 'lucide-react';
 import { useAuth } from '../../context/ContextoAutenticacion';
 import { VisorSupervisionExamen } from '../supervision/components/VisorSupervisionExamen';
 import { api as clienteAxios } from '../../api/client';
+import { usePruebaPerifericos } from './hooks/usePruebaPerifericos';
 
 export const PaginaPortalPostulante: React.FC = () => {
   const { usuario, tieneConsentimiento } = useAuth();
-  const [camaraActiva, setCamaraActiva] = useState(false);
-  const [microfonoActivo, setMicrofonoActivo] = useState(false);
-  const [comprobando, setComprobando] = useState(false);
-  const [dispositivosListos, setDispositivosListos] = useState(false);
-  const [errorHardware, setErrorHardware] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const {
+    camaraActiva, comprobando, dispositivosListos, errorHardware, videoRef,
+    detenerCamaraPreview, probarDispositivos,
+  } = usePruebaPerifericos();
 
   const [codigoAcceso, setCodigoAcceso] = useState('');
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
@@ -20,53 +18,6 @@ export const PaginaPortalPostulante: React.FC = () => {
   const [consultando, setConsultando] = useState(false);
   const [iniciando, setIniciando] = useState(false);
   const [sesionActiva, setSesionActiva] = useState<{ id: string; url: string; duracion: number } | null>(null);
-
-  const detenerCamaraPreview = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setCamaraActiva(false);
-  };
-
-  useEffect(() => {
-    if (camaraActiva && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [camaraActiva]);
-
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, []);
-
-  const probarDispositivos = async () => {
-    setComprobando(true);
-    setErrorHardware(null);
-    detenerCamaraPreview();
-    try {
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-        setMicrofonoActivo(stream.getAudioTracks().length > 0);
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-        setMicrofonoActivo(false);
-      }
-      streamRef.current = stream;
-      setCamaraActiva(true);
-      setDispositivosListos(true);
-    } catch {
-      setErrorHardware('No se pudo acceder a la cámara web. Verifica los permisos del navegador.');
-      setCamaraActiva(false);
-      setDispositivosListos(false);
-    } finally {
-      setComprobando(false);
-    }
-  };
 
   const iniciarExamenSupervisado = async () => {
     if (!examen || iniciando) return;

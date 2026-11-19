@@ -8,7 +8,8 @@ Proyecto ErgoCheck AI. Estado revisado el 19 de noviembre de 2026.
 - Commit de esta entrega: `build(deploy): configurar producción con Supabase y seguimiento` (consultable con `git log --oneline -- compose.production.yml`).
 - Bloque B implementado, verificado en Windows y Docker y publicado en `main`.
 - Bloque C implementado, verificado con Caddy y publicado en `main`.
-- Siguiente bloque **D · Verificación final**.
+- Bloque D verificado localmente y publicado en `main` con la corrección del portal del postulante.
+- Siguiente bloque **E · Entrega y publicación posterior**.
 - El servicio AWS y el dominio público se elegirán después de verificar la preparación local.
 
 ## Cómo mantener este documento
@@ -140,16 +141,30 @@ Pasaron las seis suites de regresión con PostgreSQL temporal, sin `--forceExit`
 
 ## Bloque D · Verificación final
 
-- [ ] Reconstruir e iniciar el conjunto completo siguiendo las instrucciones compartidas.
-- [ ] Verificar Supabase mediante consultas de solo lectura desde la API contenedorizada.
-- [ ] Probar navegación, cámara, modelos y WASM mediante HTTPS.
-- [ ] Probar autenticación, consentimiento, supervisión y reportes con datos aislados.
-- [ ] Comprobar el rechazo de orígenes externos.
-- [ ] Comprobar el arranque con variables ausentes y conexión inválida.
-- [ ] Probar indisponibilidad y recuperación de la base mediante la ruta de salud.
-- [ ] Verificar reinicios, cierre ordenado y persistencia de certificados.
-- [ ] Probar actualización y recuperación de una imagen anterior.
-- [ ] Repetir la auditoría de dependencias y registrar su fecha y resultado.
+- [x] Reconstruir e iniciar el conjunto completo siguiendo las instrucciones compartidas.
+- [x] Verificar Supabase mediante consultas de solo lectura desde la API contenedorizada.
+- [x] Probar navegación, cámara simulada, modelos y WASM mediante HTTPS.
+- [x] Probar autenticación, consentimiento, supervisión y reportes con datos aislados.
+- [x] Comprobar el rechazo de orígenes externos.
+- [x] Comprobar el arranque con variables ausentes y conexión inválida.
+- [x] Probar indisponibilidad y recuperación de la base mediante la ruta de salud.
+- [x] Verificar reinicios, cierre ordenado y persistencia de certificados.
+- [x] Probar actualización y recuperación de una imagen anterior.
+- [x] Repetir la auditoría de dependencias y registrar su fecha y resultado.
+- [x] Corregir y verificar la liberación de cámara y micrófono al salir del portal mientras está pendiente la solicitud de permisos.
+- [x] Publicar el avance del bloque D en `main` con el commit `fix(deploy): liberar periféricos y cerrar verificación local`.
+
+El 19 de noviembre de 2026 se reconstruyeron la API y el frontend. El Compose completo arrancó con Caddy, HTTPS y las variables privadas de Supabase. Las conexiones `DATABASE_URL` y `DIRECT_URL` respondieron dentro de transacciones de solo lectura; se usó PostgreSQL desechable para las pruebas que escriben.
+
+En Edge y Chromium se comprobó el ingreso, el bloqueo hasta firmar el consentimiento, la recarga de Mi Ergonomía y la captura con una pista de cámara simulada. MediaPipe cargó el modelo y WASM, procesó fotogramas y liberó la pista al cancelar. La verificación usó video sintético. La calibración con una persona y la cámara física quedan fuera de esa prueba.
+
+La prueba aislada comprobó la actualización de un puesto por WebSocket, leyó las tres hojas del XLSX y verificó la firma del PDF generado. HTTP y Socket.IO rechazaron orígenes externos. Las variables obligatorias vacías y las credenciales inválidas bloquearon el arranque. Al pausar PostgreSQL, la ruta de disponibilidad devolvió 503 mientras la del proceso siguió devolviendo 200, y la API se recuperó sin reiniciar. Se volvió a la imagen del bloque B y se actualizó a la candidata, conservando acceso y consentimiento. Al recrear Caddy persistió su autoridad local y las señales SIGTERM y SIGINT cerraron Prisma antes de terminar.
+
+La auditoría detectó CVE-2026-116689 en `follow-redirects` 1.16.1, una dependencia indirecta de Axios. El archivo de bloqueo del frontend pasó a 1.16.3. La auditoría final del 19 de noviembre reportó 0 vulnerabilidades en backend y frontend, tanto con todas las dependencias como con las de producción. [Aviso de la dependencia](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p).
+
+Las comprobaciones del bloque se registran en [verificación del despliegue local](../openspec/changes/verificar-despliegue-local/tasks.md).
+
+La revisión de `45b22dd` reconstruyó ambas imágenes junto con el bloque D. Pasaron 34 pruebas de backend y se verificaron el acceso de EVALUADOR y el rechazo de operaciones fuera del rol. La prueba original detectó que cerrar sesión antes de recibir la captura dejaba activas ambas pistas. Se corrigió la captura en el portal y se repitió la prueba por HTTPS en Chromium con audio y video sintéticos. Ambas pistas terminaron al recibir una respuesta tardía y un rechazo tardío omitió el segundo intento. La vista previa normal, la liberación al salir y la alternativa de solo video tras denegar el micrófono también pasaron.
 
 ## Bloque E · Entrega y publicación posterior
 
