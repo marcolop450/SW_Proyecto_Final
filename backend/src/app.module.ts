@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller';
+import { HealthController } from './health/health.controller';
+import { HealthService } from './health/health.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { OrganizacionesModule } from './modules/organizaciones/organizaciones.module';
@@ -26,8 +28,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     ErgonomiaModule,
     SupervisionModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [
+    HealthService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

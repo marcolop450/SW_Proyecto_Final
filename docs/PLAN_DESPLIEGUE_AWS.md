@@ -1,12 +1,13 @@
 # Seguimiento del despliegue en AWS
 
-Proyecto ErgoCheck AI. Estado revisado el 18 de noviembre de 2026.
+Proyecto ErgoCheck AI. Estado revisado el 19 de noviembre de 2026.
 
 - Rama de trabajo `main`.
 - Base publicada anterior al bloque A: `99a5dd7`.
 - Bloque A implementado, verificado localmente y publicado en `main` con este documento.
 - Commit de esta entrega: `build(deploy): configurar producción con Supabase y seguimiento` (consultable con `git log --oneline -- compose.production.yml`).
-- Siguiente bloque **B · Salud y cierre ordenado**.
+- Bloque B implementado, verificado en Windows y Docker y publicado en `main`.
+- Siguiente bloque **C · HTTPS y comunicaciones**.
 - El servicio AWS y el dominio público se elegirán después de verificar la preparación local.
 
 ## Cómo mantener este documento
@@ -39,7 +40,7 @@ Marcar `[x]` al implementar y verificar una tarea. Mantener `[ ]` para los pendi
 - [x] Publicar las correcciones de seguridad en `99a5dd7`.
 - [x] Consultar los beneficios gratuitos y los recursos existentes de la cuenta AWS.
 
-Las suites heredadas de supervisión se ejecutaron con `--forceExit` porque el watchdog conserva un temporizador después de cerrar la aplicación. El bloque B incluye su corrección.
+En la verificación anterior se usó `--forceExit` por el temporizador de supervisión. Con la corrección del bloque B, las suites terminan por sí solas.
 
 ### Evidencia de los bloques publicados
 
@@ -98,14 +99,25 @@ La especificación y las comprobaciones del incremento están en [configuración
 
 ## Bloque B · Salud y cierre ordenado
 
-- [ ] Terminar el arranque con un error si la conexión inicial con Supabase falla.
-- [ ] Agregar GET /api/health/live con respuesta 200 mientras el proceso funciona.
-- [ ] Agregar GET /api/health/ready con respuesta 200 si una consulta breve funciona y 503 si falla.
-- [ ] Conservar el contrato existente de GET /api.
-- [ ] Configurar la comprobación de disponibilidad en Docker y sus dependencias.
-- [ ] Habilitar el cierre ordenado ante SIGTERM y SIGINT.
-- [ ] Detener el watchdog y liberar conexiones al cerrar la aplicación.
-- [ ] Ejecutar las suites correspondientes sin `--forceExit`.
+- [x] Terminar el arranque con un error si falla la conexión inicial con PostgreSQL.
+- [x] Agregar `GET /api/health/live` con respuesta 200 mientras el proceso funciona.
+- [x] Agregar `GET /api/health/ready` con respuesta 200 si la consulta funciona y 503 si falla o supera 2,5 segundos.
+- [x] Conservar el contrato existente de `GET /api`.
+- [x] Configurar la comprobación de disponibilidad y las dependencias. Validar el archivo con `docker compose config --quiet`.
+- [x] Habilitar el cierre ordenado ante SIGTERM y SIGINT y verificar sus manejadores en un proceso de prueba.
+- [x] Detener el watchdog y liberar conexiones al cerrar la aplicación.
+- [x] Ejecutar las suites correspondientes sin `--forceExit`.
+- [x] Reconstruir la imagen y verificar `service_healthy`, recuperación y señales reales en el Compose de producción.
+- [x] Confirmar el arranque de la API contenedorizada con Supabase y consultar su disponibilidad en modo de solo lectura.
+- [x] Publicar el avance del bloque B en `main` con el commit `feat(deploy): verificar salud y cierre de la API`.
+
+El 19 de noviembre de 2026 pasaron las 25 pruebas de las cinco suites, sin `--forceExit` y con detección de recursos abiertos. Se usó Node 22 en Windows con PostgreSQL 17 desechable. Con la API compilada se verificó que sale con código 1 ante credenciales inválidas y que la disponibilidad pasa de 200 a 503 y vuelve a 200 al reiniciar la base, mientras el proceso sigue respondiendo 200. También se comprobó que los manejadores de SIGTERM y SIGINT ejecutan el cierre y desconectan Prisma. Las pruebas usaron datos de prueba locales.
+
+Tras reiniciar Windows, Docker Desktop volvió a responder y se reconstruyó la imagen de producción con Node 24. Con el Compose de producción y PostgreSQL 16 desechable se verificó que el frontend y Caddy esperan a que la API esté `healthy`. Una contraseña inválida hizo que la API terminara con código 1. Al pausar PostgreSQL, la disponibilidad devolvió 503 en unos 2,6 segundos y el proceso siguió respondiendo 200. Docker pasó a `unhealthy` y volvió a `healthy` al reanudar la base, sin reiniciar la API. SIGTERM y SIGINT cerraron la conexión a PostgreSQL antes de terminar el contenedor.
+
+Con la imagen actualizada y las variables privadas se verificó aparte el arranque con Supabase. `GET /api/health/ready` devolvió 200 después de la consulta de solo lectura. La comprobación no aplicó cambios de esquema ni cargó datos.
+
+La especificación y las evidencias del bloque están en [salud y cierre de la API](../openspec/changes/preparar-salud-cierre/tasks.md).
 
 ## Bloque C · HTTPS y comunicaciones
 

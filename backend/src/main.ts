@@ -1,11 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, ShutdownSignal } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks([ShutdownSignal.SIGTERM, ShutdownSignal.SIGINT]);
 
   app.setGlobalPrefix('api');
   app.enableCors({
@@ -39,4 +40,7 @@ async function bootstrap() {
   logger.log(`Documentación interactiva disponible en http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+bootstrap().catch(() => {
+  Logger.error('La API no pudo iniciar.', 'Bootstrap');
+  process.exit(1);
+});
