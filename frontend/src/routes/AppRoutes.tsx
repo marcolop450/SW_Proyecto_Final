@@ -63,8 +63,8 @@ const CargadorRuta = () => (
 
 export const AppRoutes: React.FC = () => {
   const rolesAdmin = ['ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'];
-  const rolesSst = ['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'];
-  const rolesEmpleado = ['EMPLEADO', 'SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'];
+  const rolesSst = ['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'];
+  const rolesEmpleado = ['EMPLEADO', 'SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'];
   const rolesPostulante = ['POSTULANTE', 'SUPER_ADMINISTRADOR'];
 
   return (

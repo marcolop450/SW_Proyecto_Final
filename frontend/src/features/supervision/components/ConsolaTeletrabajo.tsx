@@ -31,7 +31,7 @@ export const ConsolaTeletrabajo: React.FC = () => {
   const enDescanso = descansoActivo !== null;
   const jornadaEnCurso = estadoJornada === 'ACTIVA';
 
-  const { tiempoActivoSeg, tiempoOciosoSeg, tiempoDescansoSeg, estaOcioso } = useMedidorDedicacion(
+  const { tiempoActivoSeg, tiempoOciosoSeg, tiempoDescansoSeg, estaOcioso, reiniciarContadores } = useMedidorDedicacion(
     jornadaEnCurso,
     enDescanso
   );
@@ -85,6 +85,7 @@ export const ConsolaTeletrabajo: React.FC = () => {
   };
 
   const reiniciarJornada = () => {
+    reiniciarContadores();
     setEstadoJornada('PENDIENTE');
     setSessionId(null);
     setHoraInicio(null);
@@ -122,7 +123,7 @@ export const ConsolaTeletrabajo: React.FC = () => {
     setDescansoActivo(null);
   }, [descansoActivo]);
 
-  const handleCambioPresencia = (nuevoEstado: EstadoPresencia) => {
+  const handleCambioPresencia = useCallback((nuevoEstado: EstadoPresencia) => {
     setEstadoPresencia(nuevoEstado);
     if (!sessionId) return;
     if (nuevoEstado === 'AUSENTE' || nuevoEstado === 'MULTIPLE') {
@@ -133,7 +134,7 @@ export const ConsolaTeletrabajo: React.FC = () => {
         detalles: { modulo: 'TELETRABAJO' },
       }).catch(() => {});
     }
-  };
+  }, [sessionId]);
 
   return (
     <div className="space-y-6">

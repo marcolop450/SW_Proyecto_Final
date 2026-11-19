@@ -67,11 +67,16 @@ export class SupervisionGateway
         this.emitirActualizacionPuestos();
       }
     }, 5000);
+    if (this.watchdogInterval.unref) {
+      this.watchdogInterval.unref();
+    }
   }
 
   onModuleDestroy() {
-    if (this.watchdogInterval) clearInterval(this.watchdogInterval);
-    this.watchdogInterval = null;
+    if (this.watchdogInterval) {
+      clearInterval(this.watchdogInterval);
+      this.watchdogInterval = null;
+    }
   }
 
   async cargarSesionesDesdeBaseDatos(organizationId?: string): Promise<PuestoMonitoreo[]> {
@@ -106,12 +111,18 @@ export class SupervisionGateway
     if (!client.data.userId || !payload?.sessionId) return;
     const session = await this.prisma.supervisionSession.findFirst({
       where: { id: payload.sessionId, userId: client.data.userId, organizationId: client.data.organizationId, estado: 'EN_PROGRESO' },
-      include: { usuario: true },
+      include: { usuario: true, questionnaire: { select: { titulo: true } } },
     });
     if (!session) return;
     client.data.sessionId = session.id;
     client.join(`session:${session.id}`);
-    this.registrarSesionActiva({ sessionId: session.id, organizationId: session.organizationId, usuarioNombre: `${session.usuario.nombre} ${session.usuario.apellido}`, tipo: session.tipo });
+    this.registrarSesionActiva({
+      sessionId: session.id,
+      organizationId: session.organizationId,
+      usuarioNombre: `${session.usuario.nombre} ${session.usuario.apellido}`,
+      tipo: session.tipo,
+      examenTitulo: session.questionnaire?.titulo || undefined,
+    });
   }
 
   @SubscribeMessage('heartbeat')
@@ -160,11 +171,23 @@ export class SupervisionGateway
     }
   }
 
+  public notificarCierreSesion(sessionId: string) {
+    if (this.server) {
+      this.server.to(`session:${sessionId}`).emit('sesion_cerrada', { sessionId });
+    }
+    if (this.puestos.has(sessionId)) {
+      const p = this.puestos.get(sessionId)!;
+      p.estado = 'GRIS';
+      p.motivoAlerta = 'Sesión finalizada por supervisor';
+      this.emitirActualizacionPuestos();
+    }
+  }
+
   public obtenerPuestos(organizationId?: string): PuestoMonitoreo[] {
     return Array.from(this.puestos.values()).filter((p) => !organizationId || p.organizationId === organizationId);
   }
 
-  public registrarSesionActiva(input: Pick<PuestoMonitoreo, 'sessionId' | 'organizationId' | 'usuarioNombre' | 'tipo'>) {
+  public registrarSesionActiva(input: Pick<PuestoMonitoreo, 'sessionId' | 'organizationId' | 'usuarioNombre' | 'tipo' | 'examenTitulo'>) {
     this.puestos.set(input.sessionId, {
       ...input,
       rol: 'EVALUADO',
@@ -178,7 +201,7 @@ export class SupervisionGateway
   public async vincularSesion(sessionId: string, userId: string) {
     const session = await this.prisma.supervisionSession.findFirst({
       where: { id: sessionId, userId, estado: 'EN_PROGRESO' },
-      include: { usuario: true },
+      include: { usuario: true, questionnaire: { select: { titulo: true } } },
     });
     if (!session) return;
     this.registrarSesionActiva({
@@ -186,6 +209,7 @@ export class SupervisionGateway
       organizationId: session.organizationId,
       usuarioNombre: `${session.usuario.nombre} ${session.usuario.apellido}`,
       tipo: session.tipo,
+      examenTitulo: session.questionnaire?.titulo || undefined,
     });
   }
 

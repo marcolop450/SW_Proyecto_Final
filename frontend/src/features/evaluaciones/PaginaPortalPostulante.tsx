@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Mic, CheckCircle2, ShieldCheck, Video, Clock, Gauge, Play, RotateCw, Key } from 'lucide-react';
 import { useAuth } from '../../context/ContextoAutenticacion';
 import { VisorSupervisionExamen } from '../supervision/components/VisorSupervisionExamen';
@@ -7,8 +7,12 @@ import { api as clienteAxios } from '../../api/client';
 export const PaginaPortalPostulante: React.FC = () => {
   const { usuario, tieneConsentimiento } = useAuth();
   const [camaraActiva, setCamaraActiva] = useState(false);
+  const [microfonoActivo, setMicrofonoActivo] = useState(false);
   const [comprobando, setComprobando] = useState(false);
   const [dispositivosListos, setDispositivosListos] = useState(false);
+  const [errorHardware, setErrorHardware] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [codigoAcceso, setCodigoAcceso] = useState('');
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
@@ -17,13 +21,51 @@ export const PaginaPortalPostulante: React.FC = () => {
   const [iniciando, setIniciando] = useState(false);
   const [sesionActiva, setSesionActiva] = useState<{ id: string; url: string; duracion: number } | null>(null);
 
-  const probarDispositivos = () => {
+  const detenerCamaraPreview = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCamaraActiva(false);
+  };
+
+  useEffect(() => {
+    if (camaraActiva && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [camaraActiva]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const probarDispositivos = async () => {
     setComprobando(true);
-    setTimeout(() => {
+    setErrorHardware(null);
+    detenerCamaraPreview();
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        setMicrofonoActivo(stream.getAudioTracks().length > 0);
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        setMicrofonoActivo(false);
+      }
+      streamRef.current = stream;
       setCamaraActiva(true);
       setDispositivosListos(true);
+    } catch {
+      setErrorHardware('No se pudo acceder a la cámara web. Verifica los permisos del navegador.');
+      setCamaraActiva(false);
+      setDispositivosListos(false);
+    } finally {
       setComprobando(false);
-    }, 1200);
+    }
   };
 
   const iniciarExamenSupervisado = async () => {
@@ -35,6 +77,7 @@ export const PaginaPortalPostulante: React.FC = () => {
         codigoAcceso: codigoAcceso.trim(),
         tipo: 'EXAMEN',
       });
+      detenerCamaraPreview();
       setSesionActiva({
         id: res.data.id,
         url: res.data.urlExterna || 'https://forms.google.com',
@@ -116,15 +159,23 @@ export const PaginaPortalPostulante: React.FC = () => {
           <div className="relative aspect-video w-full rounded-xl bg-slate-950 flex flex-col items-center justify-center overflow-hidden border border-slate-800">
             {camaraActiva ? (
               <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
-                <div className="absolute inset-0 bg-dot-grid opacity-20 pointer-events-none" />
-                <div className="relative w-44 h-44 rounded-full border-2 border-dashed border-[#C6F432]/70 flex items-center justify-center animate-pulse">
-                  <span className="text-[10px] font-mono text-[#C6F432] bg-slate-950/80 px-2 py-0.5 rounded">
-                    Zona Ergonómica y Foco
-                  </span>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-44 h-44 rounded-full border-2 border-dashed border-[#C6F432]/70 flex items-end justify-center pb-3">
+                    <span className="text-[10px] font-mono text-[#C6F432] bg-slate-950/80 px-2 py-0.5 rounded">
+                      Zona Ergonómica y Foco
+                    </span>
+                  </div>
                 </div>
                 <div className="absolute bottom-3 left-3 bg-slate-950/80 backdrop-blur-xs px-2.5 py-1 rounded-md text-[11px] font-mono text-emerald-400 flex items-center gap-2 border border-slate-800">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  Inferencia activa: 30 FPS • Privacidad local garantizada
+                  Cámara activa en vivo • Privacidad local garantizada
                 </div>
               </div>
             ) : (
@@ -137,6 +188,9 @@ export const PaginaPortalPostulante: React.FC = () => {
                   <p className="text-xs text-slate-400 mt-1 max-w-sm">
                     Requerimos comprobar que tu ángulo y rostro permanezcan visibles para la supervisión.
                   </p>
+                  {errorHardware && (
+                    <p className="text-xs text-rose-400 mt-2 font-medium">{errorHardware}</p>
+                  )}
                 </div>
                 <button
                   type="button"

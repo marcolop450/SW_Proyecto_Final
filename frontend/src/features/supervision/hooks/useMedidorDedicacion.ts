@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useMedidorDedicacion(activo: boolean, enDescanso: boolean = false) {
   const [tiempoActivoSeg, setTiempoActivoSeg] = useState(0);
@@ -9,12 +9,20 @@ export function useMedidorDedicacion(activo: boolean, enDescanso: boolean = fals
   const ultimoMovimientoRef = useRef<number>(Date.now());
   const UMBRAL_OCIOSO_MS = 180000; // 3 minutos
 
+  const reiniciarContadores = useCallback(() => {
+    setTiempoActivoSeg(0);
+    setTiempoOciosoSeg(0);
+    setTiempoDescansoSeg(0);
+    setEstaOcioso(false);
+    ultimoMovimientoRef.current = Date.now();
+  }, []);
+
   useEffect(() => {
     if (!activo) return;
 
     const registrarActividad = () => {
       ultimoMovimientoRef.current = Date.now();
-      if (estaOcioso) setEstaOcioso(false);
+      setEstaOcioso((prev) => (prev ? false : prev));
     };
 
     window.addEventListener('mousemove', registrarActividad);
@@ -46,12 +54,13 @@ export function useMedidorDedicacion(activo: boolean, enDescanso: boolean = fals
       window.removeEventListener('scroll', registrarActividad);
       clearInterval(intervalo);
     };
-  }, [activo, enDescanso, estaOcioso]);
+  }, [activo, enDescanso]);
 
   return {
     tiempoActivoSeg,
     tiempoOciosoSeg,
     tiempoDescansoSeg,
     estaOcioso,
+    reiniciarContadores,
   };
 }

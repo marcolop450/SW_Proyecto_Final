@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Monitor, Wifi, WifiOff, Sparkles, Search, Filter } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Monitor, Wifi, WifiOff, Sparkles, Search, FileText, Laptop } from 'lucide-react';
 import { useWebSocketSupervisor, EstadoSemaforo } from '../hooks/useWebSocketSupervisor';
+import { agruparPuestosMosaico } from '../utils/agruparPuestosMosaico';
 import { TarjetaSemaforo } from './TarjetaSemaforo';
 import { api } from '../../../api/client';
 
@@ -15,8 +16,19 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
 }) => {
   const { puestos, conectado } = useWebSocketSupervisor();
   const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
+  const [filtroGrupo, setFiltroGrupo] = useState<string>('TODOS');
   const [busqueda, setBusqueda] = useState<string>('');
   const [simulando, setSimulando] = useState<boolean>(false);
+
+  const examenesDisponibles = useMemo(() => {
+    const titulos = new Set<string>();
+    puestos.forEach((p) => {
+      if (p.tipo !== 'TELETRABAJO') {
+        titulos.add(p.examenTitulo?.trim() || 'Evaluación General');
+      }
+    });
+    return Array.from(titulos).sort();
+  }, [puestos]);
 
   const simularPuestos = async () => {
     setSimulando(true);
@@ -29,23 +41,40 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
     }
   };
 
+  const puestosPorGrupo = useMemo(() => {
+    return puestos.filter((p) => {
+      const esTeletrabajo = p.tipo === 'TELETRABAJO';
+      const tituloExamen = p.examenTitulo?.trim() || 'Evaluación General';
+      return (
+        filtroGrupo === 'TODOS' ||
+        (filtroGrupo === 'TELETRABAJO' && esTeletrabajo) ||
+        (filtroGrupo === 'EXAMENES' && !esTeletrabajo) ||
+        (filtroGrupo.startsWith('EXAMEN:') && !esTeletrabajo && tituloExamen === filtroGrupo.slice(7))
+      );
+    });
+  }, [puestos, filtroGrupo]);
+
   const conteos: Record<EstadoSemaforo, number> = {
-    VERDE: puestos.filter((p) => p.estado === 'VERDE').length,
-    AMARILLO: puestos.filter((p) => p.estado === 'AMARILLO').length,
-    NARANJA: puestos.filter((p) => p.estado === 'NARANJA').length,
-    ROJO: puestos.filter((p) => p.estado === 'ROJO').length,
-    GRIS: puestos.filter((p) => p.estado === 'GRIS').length,
+    VERDE: puestosPorGrupo.filter((p) => p.estado === 'VERDE').length,
+    AMARILLO: puestosPorGrupo.filter((p) => p.estado === 'AMARILLO').length,
+    NARANJA: puestosPorGrupo.filter((p) => p.estado === 'NARANJA').length,
+    ROJO: puestosPorGrupo.filter((p) => p.estado === 'ROJO').length,
+    GRIS: puestosPorGrupo.filter((p) => p.estado === 'GRIS').length,
   };
 
-  const puestosFiltrados = puestos.filter((p) => {
+  const puestosFiltrados = puestosPorGrupo.filter((p) => {
     const coincideEstado = filtroEstado === 'TODOS' || p.estado === filtroEstado;
+    const tituloExamen = p.examenTitulo?.trim() || 'Evaluación General';
     const coincideTexto =
       !busqueda.trim() ||
       p.usuarioNombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.sessionId.toLowerCase().includes(busqueda.toLowerCase()) ||
+      tituloExamen.toLowerCase().includes(busqueda.toLowerCase()) ||
       (p.motivoAlerta && p.motivoAlerta.toLowerCase().includes(busqueda.toLowerCase()));
     return coincideEstado && coincideTexto;
   });
+
+  const gruposVisibles = useMemo(() => agruparPuestosMosaico(puestosFiltrados), [puestosFiltrados]);
 
   return (
     <div className="space-y-4">
@@ -87,86 +116,46 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Filtros por Estado y Búsqueda */}
-        <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              onClick={() => setFiltroEstado('TODOS')}
-              aria-pressed={filtroEstado === 'TODOS'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'TODOS'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Todos ({puestos.length})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('VERDE')}
-              aria-pressed={filtroEstado === 'VERDE'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'VERDE'
-                  ? 'bg-emerald-600 text-white font-semibold shadow-2xs'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-              }`}
-            >
-              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500" /> Óptimos ({conteos.VERDE})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('AMARILLO')}
-              aria-pressed={filtroEstado === 'AMARILLO'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'AMARILLO'
-                  ? 'bg-amber-500 text-white font-semibold shadow-2xs'
-                  : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-              }`}
-            >
-              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-500" /> Distraídos ({conteos.AMARILLO})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('NARANJA')}
-              aria-pressed={filtroEstado === 'NARANJA'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'NARANJA'
-                  ? 'bg-orange-500 text-white font-semibold shadow-2xs'
-                  : 'bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100'
-              }`}
-            >
-              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-orange-500" /> Riesgo Ergo ({conteos.NARANJA})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('ROJO')}
-              aria-pressed={filtroEstado === 'ROJO'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'ROJO'
-                  ? 'bg-rose-600 text-white font-semibold shadow-2xs'
-                  : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-rose-500" /> Críticos ({conteos.ROJO})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('GRIS')}
-              aria-pressed={filtroEstado === 'GRIS'}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
-                filtroEstado === 'GRIS'
-                  ? 'bg-slate-700 text-white font-semibold shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-              }`}
-            >
-              <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-slate-400" /> Inactivos ({conteos.GRIS})
-            </button>
-          </div>
+        {/* Barra compacta de Comboboxes (Modalidad/Examen + Estado Semáforo) y Búsqueda */}
+        <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          <select
+            aria-label="Filtrar por examen o modalidad"
+            value={filtroGrupo}
+            onChange={(e) => setFiltroGrupo(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500 focus:bg-white cursor-pointer"
+          >
+            <option value="TODOS">Modalidad: Todos los puestos ({puestos.length})</option>
+            <option value="EXAMENES">Solo Exámenes</option>
+            <option value="TELETRABAJO">Solo Teletrabajo</option>
+            {examenesDisponibles.map((titulo) => (
+              <option key={titulo} value={`EXAMEN:${titulo}`}>
+                Examen: {titulo}
+              </option>
+            ))}
+          </select>
 
-          {/* Buscador */}
-          <div className="relative w-full md:w-60 md:min-w-[220px]">
+          <select
+            aria-label="Filtrar por estado del semáforo"
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500 focus:bg-white cursor-pointer"
+          >
+            <option value="TODOS">Estado: Todos ({puestosPorGrupo.length})</option>
+            <option value="VERDE">Óptimos ({conteos.VERDE})</option>
+            <option value="AMARILLO">Distraídos ({conteos.AMARILLO})</option>
+            <option value="NARANJA">Riesgo Ergo ({conteos.NARANJA})</option>
+            <option value="ROJO">Críticos ({conteos.ROJO})</option>
+            <option value="GRIS">Inactivos ({conteos.GRIS})</option>
+          </select>
+
+          <div className="relative sm:col-span-2 lg:col-span-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por usuario o puesto..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white font-medium"
+              placeholder="Buscar por estudiante o puesto..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white font-medium"
             />
           </div>
         </div>
@@ -199,14 +188,35 @@ export const ConsolaMosaicoSemaforo: React.FC<Props> = ({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          {puestosFiltrados.map((puesto) => (
-            <TarjetaSemaforo
-              key={puesto.sessionId}
-              puesto={puesto}
-              onSeleccionar={onSeleccionarSesion}
-              seleccionado={sesionSeleccionadaId === puesto.sessionId}
-            />
+        <div className="space-y-5">
+          {gruposVisibles.map((grupo) => (
+            <section key={grupo.clave} className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  {grupo.tipo === 'EXAMEN' ? (
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <Laptop className="w-4 h-4 text-sky-600" />
+                  )}
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    {grupo.titulo}
+                  </h4>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500">
+                  {grupo.puestos.length} {grupo.puestos.length === 1 ? 'evaluado' : 'evaluados'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                {grupo.puestos.map((puesto) => (
+                  <TarjetaSemaforo
+                    key={puesto.sessionId}
+                    puesto={puesto}
+                    onSeleccionar={onSeleccionarSesion}
+                    seleccionado={sesionSeleccionadaId === puesto.sessionId}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

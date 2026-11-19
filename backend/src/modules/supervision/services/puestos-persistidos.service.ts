@@ -13,6 +13,7 @@ export class PuestosPersistidosService {
       orderBy: { inicio: 'desc' },
       include: {
         usuario: true,
+        questionnaire: { select: { titulo: true } },
         incidentes: { take: 3, orderBy: { timestamp: 'desc' } },
         eventosConducta: { take: 5, orderBy: { timestamp: 'desc' } },
       },
@@ -65,6 +66,7 @@ export class PuestosPersistidosService {
           : `Sesión ${sesion.id.slice(0, 8)}`,
         rol: 'EVALUADO',
         tipo: sesion.tipo,
+        examenTitulo: sesion.questionnaire?.titulo || undefined,
         estado,
         rulaScore,
         pitchEfectivo,

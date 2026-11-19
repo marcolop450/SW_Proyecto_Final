@@ -18,6 +18,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ConsentGuard } from '../../common/guards/consent.guard';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Rol } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 import { MotorCorrelacionService } from './services/motor-correlacion.service';
@@ -50,13 +52,14 @@ export class SupervisionSp4Controller {
   ) {}
 
   private async verificarSesion(sessionId: string, user: AuthenticatedUser) {
-    if (!['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'].includes(user.rol)) throw new ForbiddenException();
+    if (!['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'].includes(user.rol)) throw new ForbiddenException();
     const sesion = await this.prisma.supervisionSession.findFirst({ where: { id: sessionId, organizationId: user.organizationId } });
     if (!sesion) throw new NotFoundException('Sesión no encontrada');
     return sesion;
   }
 
   @Get('puestos-en-vivo')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU21 – Consultar puestos de monitoreo en tiempo real' })
   async listarPuestosEnVivo(@CurrentUser() user: AuthenticatedUser) {
     const puestos = this.gateway.obtenerPuestos(user.organizationId);
@@ -67,12 +70,14 @@ export class SupervisionSp4Controller {
   }
 
   @Post('puestos-en-vivo/simular')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU21 – Simular 5 puestos en tiempo real para verificar el semáforo y watchdog' })
   async simularPuestosEnVivo(@CurrentUser() user: AuthenticatedUser) {
     return this.gateway.simularPuestosDemo(user.organizationId);
   }
 
   @Get('sesiones')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU20/CU21 – Listar sesiones de supervisión de la organización' })
   async listarSesiones(@CurrentUser() user: AuthenticatedUser) {
     return this.prisma.supervisionSession.findMany({
@@ -265,6 +270,8 @@ export class SupervisionSp4Controller {
       },
     });
 
+    this.gateway.notificarCierreSesion(sessionId);
+
     return {
       mensaje: 'Sesión cerrada exitosamente e índices sintéticos calculados',
       sesion,
@@ -388,6 +395,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Consultar bitácora WORM inmutable con filtros avanzados' })
   async consultarBitacora(
     @Query('categoria') categoria?: string,
@@ -411,12 +419,14 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/estadisticas')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Estadísticas y métricas de la bitácora WORM' })
   async obtenerEstadisticas() {
     return this.bitacora.obtenerEstadisticas();
   }
 
   @Get('bitacora/verificar')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Verificar matemáticamente la integridad de la cadena SHA-256' })
   async verificarCadena(@CurrentUser() user: AuthenticatedUser) {
     const verificacion = await this.bitacora.verificarIntegridadCadena();
@@ -436,6 +446,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar-excel')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM a hoja de cálculo Excel (.xlsx) estructurada' })
   async exportarExcel(
     @CurrentUser() user: AuthenticatedUser,
@@ -463,6 +474,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM a CSV' })
   async exportarCsv(
     @CurrentUser() user: AuthenticatedUser,
@@ -487,6 +499,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar-json')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM con metadata criptográfica a JSON' })
   async exportarJson(
     @CurrentUser() user: AuthenticatedUser,
