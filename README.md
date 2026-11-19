@@ -2,6 +2,8 @@
 
 > **Plataforma integral empresarial que combina visión artificial en el dispositivo (Edge AI), supervisión de probidad en tiempo real por WebSockets, motor de correlación de fatiga y bitácora de auditoría inmutable WORM.**
 
+El [plan de despliegue en AWS](docs/PLAN_DESPLIEGUE_AWS.md) registra las tareas verificadas, los pendientes y las instrucciones para continuar el trabajo en equipo.
+
 ---
 
 ## 🌟 Características Principales

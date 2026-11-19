@@ -1,0 +1,71 @@
+name: ergocheck-production
+
+x-logging: &production-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backend:
+    image: ergocheck/backend:${RELEASE_TAG:?Define RELEASE_TAG para identificar las imágenes}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Configura DATABASE_URL para Supabase}
+      DIRECT_URL: ${DIRECT_URL:?Configura DIRECT_URL para Supabase}
+      JWT_SECRET: ${JWT_SECRET:?Configura un JWT_SECRET aleatorio de al menos 32 caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PORT: "3000"
+      NODE_ENV: production
+    expose:
+      - "3000"
+    logging: *production-logging
+    networks:
+      - application
+
+  frontend:
+    image: ergocheck/frontend:${RELEASE_TAG:?Define RELEASE_TAG para identificar las imágenes}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    expose:
+      - "80"
+    logging: *production-logging
+    networks:
+      - application
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Configura APP_DOMAIN con localhost o el dominio público}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:80:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *production-logging
+    networks:
+      - application
+
+networks:
+  application:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
