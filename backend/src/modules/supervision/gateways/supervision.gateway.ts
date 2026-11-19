@@ -15,7 +15,7 @@ import type { EstadoSemaforo, PuestoMonitoreo } from '../types/puesto-monitoreo'
 
 export type { EstadoSemaforo, PuestoMonitoreo } from '../types/puesto-monitoreo';
 
-@WebSocketGateway({ cors: { origin: '*' }, namespace: '/supervision' })
+@WebSocketGateway({ namespace: '/supervision' })
 export class SupervisionGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnApplicationBootstrap, OnModuleDestroy {
   @WebSocketServer()

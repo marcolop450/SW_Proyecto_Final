@@ -7,7 +7,8 @@ Proyecto ErgoCheck AI. Estado revisado el 19 de noviembre de 2026.
 - Bloque A implementado, verificado localmente y publicado en `main` con este documento.
 - Commit de esta entrega: `build(deploy): configurar producción con Supabase y seguimiento` (consultable con `git log --oneline -- compose.production.yml`).
 - Bloque B implementado, verificado en Windows y Docker y publicado en `main`.
-- Siguiente bloque **C · HTTPS y comunicaciones**.
+- Bloque C implementado, verificado con Caddy y publicado en `main`.
+- Siguiente bloque **D · Verificación final**.
 - El servicio AWS y el dominio público se elegirán después de verificar la preparación local.
 
 ## Cómo mantener este documento
@@ -126,11 +127,16 @@ La especificación y las evidencias del bloque están en [salud y cierre de la A
 - [x] Encauzar /api y /api/* directamente al backend.
 - [x] Encauzar /socket.io/* conservando las conexiones WebSocket.
 - [x] Conservar las rutas del frontend al recargar una página.
-- [ ] Compartir la política de orígenes permitidos entre HTTP y Socket.IO.
-- [ ] Verificar el protocolo y la dirección del cliente detrás del proxy.
+- [x] Compartir la política de orígenes permitidos entre HTTP y Socket.IO.
+- [x] Verificar el protocolo y la dirección del cliente detrás del proxy.
 - [x] Comprobar HTTPS local confiando expresamente en la autoridad de prueba de Caddy.
+- [x] Publicar el avance del bloque C en `main` con el commit `feat(deploy): proteger orígenes y confianza en Caddy`.
 
-La entrada base de Caddy se prepara junto al bloque A porque el conjunto necesita una entrada funcional para sus comprobaciones. La cámara en navegador y la política de orígenes se verificarán en las tareas posteriores.
+Compose de producción deriva el origen permitido de `https://${APP_DOMAIN}` y configura Express para confiar en el salto de Caddy. Caddy publica la entrada HTTPS y establece el protocolo y la dirección que observa en la conexión entrante. El Compose de desarrollo conserva los orígenes locales y permite ajustar `WEB_ALLOWED_ORIGINS` si se usa otra dirección. La confianza en el proxy debe revisarse si se agrega un balanceador por delante de Caddy.
+
+El 19 de noviembre de 2026 se comprobaron por HTTPS la navegación React, el preflight, la API y Socket.IO autenticado por polling y WebSocket. El sitio configurado funcionó y los orígenes externos se rechazaron. Una conexión sin token también se rechazó. Un cliente dentro de la red Docker confirmó que Express reconoce su IP y HTTPS cuando Caddy recibe cabeceras alteradas. El flujo de consentimiento guardó la IP observada en una base PostgreSQL desechable.
+
+Pasaron las seis suites de regresión con PostgreSQL temporal, sin `--forceExit`. También pasaron las nueve pruebas específicas de comunicaciones después de comprobar un formato adicional de URL inválida. La verificación con dominio público y cámara en un navegador queda para las etapas siguientes. Los detalles están en [comunicaciones de producción](../openspec/changes/preparar-comunicaciones-produccion/tasks.md).
 
 ## Bloque D · Verificación final
 

@@ -20,6 +20,8 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: "3000"
       NODE_ENV: production
+      WEB_ALLOWED_ORIGINS: https://${APP_DOMAIN:?Configura APP_DOMAIN con localhost o el dominio público}
+      TRUST_CADDY_PROXY: "true"
     expose:
       - "3000"
     healthcheck:
