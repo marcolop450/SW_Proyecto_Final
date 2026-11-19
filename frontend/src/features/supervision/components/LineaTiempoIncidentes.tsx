@@ -9,12 +9,12 @@ import {
   ChevronDown,
   ChevronUp,
   Cpu,
-  Info,
   FileText,
   Edit3,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { ModalAuditarIncidente } from './ModalAuditarIncidente';
+import { DetalleSenal } from './DetalleSenal';
 
 export interface SignalExplicativa {
   tipo: string;
@@ -35,6 +35,12 @@ export interface Incidente {
   signals?: SignalExplicativa[];
   timestamp: string;
   justificacion?: string;
+  session?: {
+    usuario: { nombre: string; apellido: string } | null;
+    questionnaire: { titulo: string } | null;
+    tipo: string;
+    inicio: string;
+  };
 }
 
 interface Props {
@@ -52,6 +58,7 @@ const SEVERIDAD_CONFIG = {
 export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteAuditado }) => {
   const [incidentes, setIncidentes] = useState<Incidente[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [auditandoId, setAuditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [incidenteModal, setIncidenteModal] = useState<Incidente | null>(null);
@@ -59,11 +66,13 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
   const cargarIncidentes = async () => {
     if (!sessionId) return;
     setCargando(true);
+    setError(null);
     try {
       const res = await api.get(`/supervision/incidentes/${sessionId}`);
       setIncidentes(res.data || []);
     } catch {
       setIncidentes([]);
+      setError('No se pudieron cargar las situaciones. Comprueba la conexión e inténtalo de nuevo.');
     } finally {
       setCargando(false);
     }
@@ -95,8 +104,8 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
       <div className="flex items-center justify-between pb-2 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-emerald-600" />
-          <h4 className="text-xs font-bold text-slate-900">Incidentes Correlacionados</h4>
-          <span className="text-[10px] font-mono text-slate-500">({incidentes.length})</span>
+          <h4 className="text-xs font-bold text-slate-900">Situaciones para revisar</h4>
+          {!cargando && !error && <span className="text-[10px] font-mono text-slate-500">({incidentes.length})</span>}
         </div>
         <button
           onClick={cargarIncidentes}
@@ -108,9 +117,9 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
         </button>
       </div>
 
-      {incidentes.length === 0 ? (
+      {error ? <p role="alert" className="p-4 text-sm text-rose-700">{error}</p> : cargando ? <p className="p-4 text-sm text-slate-500">Cargando situaciones…</p> : incidentes.length === 0 ? (
         <div className="p-8 text-center text-slate-500 text-xs font-mono bg-slate-50 rounded-2xl border border-slate-200">
-          Cero anomalías o incidentes reportados en esta sesión. Presione &quot;Ejecutar Correlación&quot; para evaluar eventos.
+          No hay resultados para mostrar. Pulsa «Revisar eventos» para analizar los eventos registrados.
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -124,6 +133,11 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
                 key={inc.id}
                 className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50 transition-all text-xs space-y-2.5"
               >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 pb-2 text-xs text-slate-600">
+                  <span><strong className="text-slate-900">Persona evaluada:</strong> {inc.session?.usuario ? `${inc.session.usuario.nombre} ${inc.session.usuario.apellido}` : 'No disponible'}</span>
+                  <span><strong className="text-slate-900">Sesión:</strong> {inc.session?.questionnaire?.titulo || (inc.session?.tipo === 'EXAMEN' ? 'Examen sin nombre' : inc.session?.tipo === 'TELETRABAJO' ? 'Teletrabajo' : inc.session?.tipo || 'No disponible')}</span>
+                  {inc.session?.inicio && <span>Iniciada: {new Date(inc.session.inicio).toLocaleString()}</span>}
+                </div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -133,7 +147,7 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
                       <span className="font-semibold text-slate-900 text-xs">{inc.tipo}</span>
                       <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
-                        {new Date(inc.timestamp).toLocaleTimeString()}
+                        {new Date(inc.timestamp).toLocaleString()}
                       </span>
                     </div>
                     <p className="text-slate-600 text-[11px] leading-relaxed">{inc.resumen}</p>
@@ -158,7 +172,7 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
                       type="button"
                       onClick={() => setIncidenteModal(inc)}
                       className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 border border-slate-200 transition-colors cursor-pointer"
-                      title="Auditar y agregar nota técnica"
+                      title="Revisar y añadir una nota"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
@@ -169,7 +183,7 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
                 {inc.justificacion && (
                   <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-mono text-slate-700 flex items-start gap-1.5 shadow-2xs">
                     <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong>Dictamen de Auditoría:</strong> {inc.justificacion}</span>
+                    <span><strong>Decisión:</strong> {inc.justificacion}</span>
                   </div>
                 )}
 
@@ -179,39 +193,17 @@ export const LineaTiempoIncidentes: React.FC<Props> = ({ sessionId, onIncidenteA
                     <button
                       type="button"
                       onClick={() => setExpandidoId(estaExpandido ? null : inc.id)}
-                      className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-700 hover:text-emerald-800 font-semibold transition-colors pt-1 cursor-pointer"
+                      aria-expanded={estaExpandido}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
                     >
                       <Cpu className="w-3 h-3" />
-                      <span>{estaExpandido ? 'Ocultar Señales de Comportamiento' : `Ver Señales de Comportamiento (${inc.signals?.length})`}</span>
+                      <span>{estaExpandido ? 'Ocultar detalles' : `Ver detalles (${inc.signals?.length})`}</span>
                       {estaExpandido ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                     </button>
 
                     {estaExpandido && (
                       <div className="mt-2 p-3.5 rounded-xl bg-white border border-slate-200 text-[11px] font-mono space-y-2.5 shadow-2xs">
-                        {inc.signals?.map((sig, sIdx) => (
-                          <div key={sIdx} className="space-y-1 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-                            <div className="flex items-center justify-between text-slate-600">
-                              <span className="text-emerald-700 font-semibold">{sig.tipo}</span>
-                              {sig.confianza && (
-                                <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md border border-emerald-200 font-semibold">
-                                  {sig.confianza}% confianza
-                                </span>
-                              )}
-                            </div>
-                            {sig.criterio && <p className="text-slate-600 text-[10px]">{sig.criterio}</p>}
-                            {sig.recomendacionForense && (
-                              <p className="text-amber-800 bg-amber-50/70 p-2 rounded-lg border border-amber-200/60 text-[10px] flex items-start gap-1">
-                                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
-                                <span>{sig.recomendacionForense}</span>
-                              </p>
-                            )}
-                            {sig.valor && (
-                              <pre className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[9px] text-sky-800 overflow-x-auto">
-                                {JSON.stringify(sig.valor, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        ))}
+                        {inc.signals?.map((sig, sIdx) => <DetalleSenal key={sIdx} señal={sig} />)}
                       </div>
                     )}
                   </div>

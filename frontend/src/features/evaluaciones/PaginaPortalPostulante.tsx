@@ -3,37 +3,32 @@ import { Camera, Mic, CheckCircle2, ShieldCheck, Video, Clock, Gauge, Play, Rota
 import { useAuth } from '../../context/ContextoAutenticacion';
 import { VisorSupervisionExamen } from '../supervision/components/VisorSupervisionExamen';
 import { api as clienteAxios } from '../../api/client';
+import { usePruebaPerifericos } from './hooks/usePruebaPerifericos';
 
 export const PaginaPortalPostulante: React.FC = () => {
   const { usuario, tieneConsentimiento } = useAuth();
-  const [camaraActiva, setCamaraActiva] = useState(false);
-  const [comprobando, setComprobando] = useState(false);
-  const [dispositivosListos, setDispositivosListos] = useState(false);
+  const {
+    camaraActiva, comprobando, dispositivosListos, errorHardware, videoRef,
+    detenerCamaraPreview, probarDispositivos,
+  } = usePruebaPerifericos();
 
   const [codigoAcceso, setCodigoAcceso] = useState('');
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
+  const [examen, setExamen] = useState<{ titulo: string; duracionMinutos: number; codigo: string } | null>(null);
+  const [consultando, setConsultando] = useState(false);
+  const [iniciando, setIniciando] = useState(false);
   const [sesionActiva, setSesionActiva] = useState<{ id: string; url: string; duracion: number } | null>(null);
 
-  const probarDispositivos = () => {
-    setComprobando(true);
-    setTimeout(() => {
-      setCamaraActiva(true);
-      setDispositivosListos(true);
-      setComprobando(false);
-    }, 1200);
-  };
-
   const iniciarExamenSupervisado = async () => {
-    if (!codigoAcceso.trim()) {
-      setErrorCodigo('Ingresa el código de acceso proporcionado por el evaluador.');
-      return;
-    }
+    if (!examen || iniciando) return;
     setErrorCodigo(null);
+    setIniciando(true);
     try {
       const res = await clienteAxios.post('/supervision/sesion/iniciar', {
         codigoAcceso: codigoAcceso.trim(),
         tipo: 'EXAMEN',
       });
+      detenerCamaraPreview();
       setSesionActiva({
         id: res.data.id,
         url: res.data.urlExterna || 'https://forms.google.com',
@@ -41,7 +36,23 @@ export const PaginaPortalPostulante: React.FC = () => {
       });
     } catch (err: any) {
       setErrorCodigo(err?.response?.data?.message || 'Código inválido o expirado.');
+    } finally {
+      setIniciando(false);
     }
+  };
+
+  const consultarExamen = async () => {
+    const codigo = codigoAcceso.trim();
+    if (!codigo) { setErrorCodigo('Ingresa el código proporcionado por tu evaluador.'); return; }
+    setConsultando(true);
+    setErrorCodigo(null);
+    setExamen(null);
+    try {
+      const res = await clienteAxios.get(`/supervision/cuestionarios/codigo/${encodeURIComponent(codigo)}`);
+      setExamen({ titulo: res.data.titulo, duracionMinutos: res.data.duracionMinutos, codigo });
+    } catch (err: any) {
+      setErrorCodigo(err?.response?.data?.message || 'No se pudo consultar el examen.');
+    } finally { setConsultando(false); }
   };
 
   if (sesionActiva) {
@@ -99,15 +110,23 @@ export const PaginaPortalPostulante: React.FC = () => {
           <div className="relative aspect-video w-full rounded-xl bg-slate-950 flex flex-col items-center justify-center overflow-hidden border border-slate-800">
             {camaraActiva ? (
               <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
-                <div className="absolute inset-0 bg-dot-grid opacity-20 pointer-events-none" />
-                <div className="relative w-44 h-44 rounded-full border-2 border-dashed border-[#C6F432]/70 flex items-center justify-center animate-pulse">
-                  <span className="text-[10px] font-mono text-[#C6F432] bg-slate-950/80 px-2 py-0.5 rounded">
-                    Zona Ergonómica y Foco
-                  </span>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-44 h-44 rounded-full border-2 border-dashed border-[#C6F432]/70 flex items-end justify-center pb-3">
+                    <span className="text-[10px] font-mono text-[#C6F432] bg-slate-950/80 px-2 py-0.5 rounded">
+                      Zona Ergonómica y Foco
+                    </span>
+                  </div>
                 </div>
                 <div className="absolute bottom-3 left-3 bg-slate-950/80 backdrop-blur-xs px-2.5 py-1 rounded-md text-[11px] font-mono text-emerald-400 flex items-center gap-2 border border-slate-800">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  Inferencia activa: 30 FPS • Privacidad local garantizada
+                  Cámara activa en vivo • Privacidad local garantizada
                 </div>
               </div>
             ) : (
@@ -120,6 +139,9 @@ export const PaginaPortalPostulante: React.FC = () => {
                   <p className="text-xs text-slate-400 mt-1 max-w-sm">
                     Requerimos comprobar que tu ángulo y rostro permanezcan visibles para la supervisión.
                   </p>
+                  {errorHardware && (
+                    <p className="text-xs text-rose-400 mt-2 font-medium">{errorHardware}</p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -167,29 +189,33 @@ export const PaginaPortalPostulante: React.FC = () => {
               <Key className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
+                disabled={consultando || iniciando}
                 placeholder="Ej: EXAM-A1B2C3"
                 value={codigoAcceso}
-                onChange={(e) => setCodigoAcceso(e.target.value.toUpperCase())}
+                onChange={(e) => { setCodigoAcceso(e.target.value.toUpperCase()); setExamen(null); setErrorCodigo(null); }}
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
               />
             </div>
+            <button type="button" onClick={consultarExamen} disabled={consultando || !codigoAcceso.trim()} className="w-full rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{consultando ? 'Buscando examen...' : 'Buscar examen'}</button>
             {errorCodigo && <p className="text-[11px] text-rose-600 font-medium">{errorCodigo}</p>}
           </div>
 
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-slate-800 p-5 text-white shadow-2xs space-y-3">
             <span className="text-[10px] font-mono uppercase tracking-widest text-[#C6F432]">Sala de Examen</span>
+            <div className="space-y-1 text-xs text-slate-200"><p>Postulante: <strong className="text-white">{usuario?.nombre} {usuario?.apellido}</strong></p><p>Cuenta: {usuario?.correo}</p><p>Examen: <strong className="text-white">{examen?.titulo || 'Busca tu examen con el código'}</strong></p>{examen && <p>Duración: {examen.duracionMinutos} minutos</p>}</div>
+            <p className="text-xs text-slate-300">La sesión y sus registros quedarán asociados a esta cuenta. Comprueba tu nombre antes de comenzar.</p>
             <p className="text-xs text-slate-300">
               Se activará pantalla completa forzada y supervisión biométrica local en RAM.
             </p>
             <button
               type="button"
               onClick={iniciarExamenSupervisado}
-              disabled={!dispositivosListos}
+              disabled={!dispositivosListos || !examen || iniciando || consultando}
               className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                dispositivosListos ? 'bg-[#C6F432] text-slate-950 hover:bg-[#b8e42d] cursor-pointer' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                dispositivosListos && examen && !iniciando && !consultando ? 'bg-[#C6F432] text-slate-950 hover:bg-[#b8e42d] cursor-pointer' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
             >
-              {dispositivosListos ? 'Ingresar a Sala de Examen' : 'Calibra Periféricos Primero'}
+              {iniciando ? 'Iniciando examen...' : !dispositivosListos ? 'Calibra periféricos primero' : !examen ? 'Busca tu examen primero' : 'Iniciar examen'}
             </button>
           </div>
         </div>

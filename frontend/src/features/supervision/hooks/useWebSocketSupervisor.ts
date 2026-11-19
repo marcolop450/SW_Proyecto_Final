@@ -10,6 +10,7 @@ export interface PuestoMonitoreo {
   usuarioNombre: string;
   rol: string;
   tipo: string;
+  examenTitulo?: string;
   estado: EstadoSemaforo;
   rulaScore?: number;
   pitchEfectivo?: number;

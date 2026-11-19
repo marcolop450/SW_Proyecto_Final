@@ -6,16 +6,19 @@ import { MotorCorrelacionService } from './services/motor-correlacion.service';
 import { BitacoraInmutableService } from './services/bitacora-inmutable.service';
 import { GeneradorReportesService } from './services/generador-reportes.service';
 import { SupervisionGateway } from './gateways/supervision.gateway';
+import { PuestosPersistidosService } from './services/puestos-persistidos.service';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule],
   controllers: [SupervisionController, SupervisionSp4Controller],
   providers: [
     SupervisionService,
     MotorCorrelacionService,
     BitacoraInmutableService,
     GeneradorReportesService,
+    PuestosPersistidosService,
     SupervisionGateway,
   ],
   exports: [

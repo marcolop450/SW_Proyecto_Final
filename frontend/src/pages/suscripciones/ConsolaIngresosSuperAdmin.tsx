@@ -9,7 +9,7 @@ interface Props {
 
 export const ConsolaIngresosSuperAdmin: React.FC<Props> = ({ facturas, planes }) => {
   const facturasPagadas = facturas.filter((f) => f.status === 'PAID');
-  const ingresosTotalesHistoricos = facturasPagadas.reduce((acc, f) => acc + (f.amount || 0), 0);
+  const ingresosTotalesHistoricos = facturasPagadas.reduce((acc, f) => acc + Number(f.amount || 0), 0);
   const mrrEstimado = 475.0; // 25 puestos activos en Visitask a $19/mes
   const arrProyectado = mrrEstimado * 12;
 
@@ -76,7 +76,7 @@ export const ConsolaIngresosSuperAdmin: React.FC<Props> = ({ facturas, planes })
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-bold text-slate-900 font-mono">
-            ${ingresosTotalesHistoricos.toFixed(2)}
+            ${Number(ingresosTotalesHistoricos || 0).toFixed(2)}
           </p>
           <span className="inline-block text-[11px] text-emerald-700 font-mono">
             100% transacciones liquidadas
@@ -157,7 +157,7 @@ export const ConsolaIngresosSuperAdmin: React.FC<Props> = ({ facturas, planes })
                       {f.paidAt ? new Date(f.paidAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-4 py-3 font-bold text-slate-900">
-                      ${f.amount?.toFixed(2)} {f.currency}
+                      ${Number(f.amount || 0).toFixed(2)} {f.currency}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-[11px]">{f.paymentProvider}</td>
                     <td className="px-4 py-3 text-slate-400 text-[11px]">{f.transactionId || 'N/A'}</td>

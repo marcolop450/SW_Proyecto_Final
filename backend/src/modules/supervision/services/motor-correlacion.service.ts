@@ -308,6 +308,7 @@ export class MotorCorrelacionService {
   async obtenerIncidentes(sessionId: string): Promise<any[]> {
     return this.prisma.incident.findMany({
       where: { sessionId },
+      include: { session: { select: { usuario: { select: { nombre: true, apellido: true } }, questionnaire: { select: { titulo: true } }, tipo: true, inicio: true } } },
       orderBy: { timestamp: 'desc' },
     });
   }

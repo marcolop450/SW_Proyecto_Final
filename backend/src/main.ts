@@ -1,17 +1,17 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, ShutdownSignal } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { configurarComunicaciones } from './common/http/configurar-comunicaciones';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.enableShutdownHooks([ShutdownSignal.SIGTERM, ShutdownSignal.SIGINT]);
 
   app.setGlobalPrefix('api');
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
+  configurarComunicaciones(app);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,7 +31,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  app.getHttpAdapter().get('/', (req, res) => res.redirect('/api/docs'));
+  const http = app.getHttpAdapter();
+  http.get('/', (_req, res) => http.redirect(res, 302, '/api/docs'));
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
@@ -39,4 +40,7 @@ async function bootstrap() {
   logger.log(`Documentación interactiva disponible en http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+bootstrap().catch(() => {
+  Logger.error('La API no pudo iniciar.', 'Bootstrap');
+  process.exit(1);
+});

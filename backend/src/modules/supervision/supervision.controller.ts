@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { SupervisionService } from './supervision.service';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Rol } from '@prisma/client';
 import { ConsentGuard } from '../../common/guards/consent.guard';
 import { CrearCuestionarioDto } from './dto/crear-cuestionario.dto';
 import { IniciarSupervisionDto } from './dto/iniciar-supervision.dto';
@@ -15,6 +17,7 @@ export class SupervisionController {
   constructor(private readonly supervisionService: SupervisionService) {}
 
   @Post('cuestionarios')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   async crearCuestionario(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CrearCuestionarioDto,
@@ -23,13 +26,14 @@ export class SupervisionController {
   }
 
   @Get('cuestionarios')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   async listarCuestionarios(@CurrentUser() user: AuthenticatedUser) {
     return this.supervisionService.listarCuestionarios(user.organizationId);
   }
 
   @Get('cuestionarios/codigo/:codigo')
-  async validarCodigo(@Param('codigo') codigo: string) {
-    return this.supervisionService.validarCodigo(codigo);
+  async validarCodigo(@Param('codigo') codigo: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.supervisionService.validarCodigo(codigo, user.organizationId);
   }
 
   @Post('sesion/iniciar')
@@ -50,6 +54,7 @@ export class SupervisionController {
   }
 
   @Post('sesion/:id/disparar-pregunta')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   async dispararPregunta(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,

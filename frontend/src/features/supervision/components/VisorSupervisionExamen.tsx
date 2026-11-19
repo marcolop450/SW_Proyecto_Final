@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldAlert, Maximize2, Video, Clock, CheckCircle } from 'lucide-react';
+import { ShieldAlert, Maximize2, Video, Clock, CheckCircle, ExternalLink } from 'lucide-react';
 import { obtenerDetectorFacial, reiniciarDetectorFacial } from '../services/detectorFacial';
 import { calcularOrientacionCabeza } from '../utils/calculadorOrientacionCabeza';
 import { DetectorSospechaCelular } from '../utils/detectorSospechaCelular';
@@ -8,6 +8,7 @@ import { useTelemetriaNavegador } from '../hooks/useTelemetriaNavegador';
 import { useModoEntrevista } from '../hooks/useModoEntrevista';
 import { ModalPreguntaEntrevista } from './ModalPreguntaEntrevista';
 import { api as clienteAxios } from '../../../api/client';
+import { io } from 'socket.io-client';
 
 interface Props {
   sessionId: string;
@@ -30,6 +31,35 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
   const detectorCelularRef = useRef(new DetectorSospechaCelular());
   const auditorRostrosRef = useRef(new AuditorPresenciaRostros());
   const animFrameRef = useRef<number | null>(null);
+  const onFinalizarRef = useRef(onFinalizar);
+  onFinalizarRef.current = onFinalizar;
+
+  const urlEmbebida = React.useMemo(() => {
+    if (urlExterna.includes('docs.google.com/forms') && !urlExterna.includes('embedded=true')) {
+      return urlExterna.includes('?') ? `${urlExterna}&embedded=true` : `${urlExterna}?embedded=true`;
+    }
+    return urlExterna;
+  }, [urlExterna]);
+
+  const finalizar = async () => {
+    try { await clienteAxios.post(`/supervision/sesion/${sessionId}/finalizar`, {}); } catch {}
+    onFinalizarRef.current();
+  };
+
+  useEffect(() => {
+    const socket = io(window.location.origin + '/supervision', {
+      auth: { token: localStorage.getItem('ergocheck_token') },
+      transports: ['websocket', 'polling'],
+    });
+    socket.on('connect', () => socket.emit('registrar_puesto', { sessionId }));
+    socket.on('sesion_cerrada', (data: { sessionId?: string }) => {
+      if (!data?.sessionId || data.sessionId === sessionId) {
+        onFinalizarRef.current();
+      }
+    });
+    const heartbeat = setInterval(() => { if (socket.connected) socket.emit('heartbeat', { sessionId }); }, 5000);
+    return () => { clearInterval(heartbeat); socket.disconnect(); };
+  }, [sessionId]);
 
   const registrarEventoEnBackend = async (tipo: string, severidad: string, duracionMs = 0, detalles = {}) => {
     try {
@@ -69,30 +99,37 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
       setSegundosRestantes((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          onFinalizar();
+          void finalizar();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [onFinalizar]);
+  }, [sessionId]);
 
   useEffect(() => {
+    let activo = true;
     let stream: MediaStream | null = null;
     let detector: any = null;
 
     const iniciarInferencia = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        if (!activo) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
         detector = await obtenerDetectorFacial();
+        if (!activo) return;
         setCamaraLista(true);
 
         const procesarFrame = () => {
+          if (!activo) return;
           if (videoRef.current && detector && videoRef.current.readyState >= 2) {
             const timestamp = performance.now();
             const res = detector.detectForVideo(videoRef.current, timestamp);
@@ -109,6 +146,12 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
             } else if (audPresencia.evento === 'MULTIPLE_FACES') {
               setInfraccionActiva('Múltiples personas detectadas.');
               registrarEventoEnBackend('MULTIPLE_FACES', 'CRITICAL', audPresencia.duracionMs);
+            } else if (caras.length === 1) {
+              setInfraccionActiva((prev) =>
+                prev === 'Rostro ausente del encuadre.' || prev === 'Múltiples personas detectadas.'
+                  ? null
+                  : prev,
+              );
             }
 
             // 2. Orientación de cabeza y celular
@@ -121,6 +164,7 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
 
               if (sospechaDetectada) {
                 setInfraccionActiva('Sospecha de dispositivo móvil en regazo.');
+                setTimeout(() => setInfraccionActiva(null), 4000);
                 registrarEventoEnBackend('GAZE_DOWN_SUSTAINED', 'HIGH', duracionMs, orientacion);
               }
 
@@ -149,11 +193,12 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
     iniciarInferencia();
 
     return () => {
+      activo = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (stream) stream.getTracks().forEach((t) => t.stop());
       reiniciarDetectorFacial();
     };
-  }, [sessionId, procesarMuestraBlendshapes]);
+  }, [sessionId]);
 
   const minutos = Math.floor(segundosRestantes / 60);
   const segundos = segundosRestantes % 60;
@@ -181,6 +226,16 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
         )}
 
         <div className="flex items-center gap-3">
+          <a
+            href={urlExterna}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs transition"
+            title="Si el sitio bloquea la vista integrada, ábrelo en una nueva pestaña"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Abrir enlace externo</span>
+          </a>
           {!enPantallaCompleta && (
             <button
               onClick={solicitarPantallaCompleta}
@@ -191,7 +246,7 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
             </button>
           )}
           <button
-            onClick={onFinalizar}
+            onClick={finalizar}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition"
           >
             <CheckCircle className="w-3.5 h-3.5 text-[#C6F432]" />
@@ -200,10 +255,10 @@ export const VisorSupervisionExamen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Contenedor del Cuestionario Externo (Google Forms) */}
+      {/* Contenedor del Cuestionario Externo */}
       <div className="flex-1 w-full bg-white relative">
         <iframe
-          src={urlExterna}
+          src={urlEmbebida}
           title="Evaluación Supervisada"
           className="w-full h-full border-none"
           sandbox="allow-forms allow-scripts allow-same-origin allow-popups"

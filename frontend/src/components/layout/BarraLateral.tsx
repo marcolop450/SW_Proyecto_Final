@@ -46,41 +46,41 @@ export const BarraLateral: React.FC<Props> = ({ abiertoEnMovil, alCerrarMovil })
       to: '/cuestionarios',
       label: 'Exámenes y Cuestionarios',
       icono: FileQuestion,
-      roles: ['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/consola-supervision',
       label: 'Consola Tiempo Real',
       icono: Monitor,
-      roles: ['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/reportes',
       label: 'Centro de Reportes',
       icono: FileText,
-      roles: ['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/teletrabajo',
       label: 'Modo Teletrabajo',
       icono: Laptop,
-      roles: ['EMPLEADO', 'SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['EMPLEADO', 'SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/mi-ergonomia',
       label: esSuperAdmin ? 'Consola de Ergonomía' : 'Mi Ergonomía',
       icono: Activity,
-      roles: ['EMPLEADO', 'SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['EMPLEADO', 'SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/dashboard',
       label: esSuperAdmin
         ? 'Métricas Globales SaaS'
-        : usuario?.rol === 'SUPERVISOR'
+        : usuario?.rol === 'SUPERVISOR' || usuario?.rol === 'EVALUADOR'
         ? 'Monitoreo SST'
         : 'Panel General SST',
       icono: LayoutDashboard,
-      roles: ['SUPERVISOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
+      roles: ['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'],
     },
     {
       to: '/organizaciones',

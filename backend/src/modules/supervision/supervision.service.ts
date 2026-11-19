@@ -8,12 +8,14 @@ import { RespuestaPreguntaDto } from './dto/respuesta-pregunta.dto';
 import { FinalizarSupervisionDto } from './dto/finalizar-supervision.dto';
 import { BitacoraInmutableService } from './services/bitacora-inmutable.service';
 import * as crypto from 'crypto';
+import { SupervisionGateway } from './gateways/supervision.gateway';
 
 @Injectable()
 export class SupervisionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bitacora: BitacoraInmutableService,
+    private readonly gateway: SupervisionGateway,
   ) {}
 
   async crearCuestionario(organizacionId: string, creadorId: string, dto: CrearCuestionarioDto) {
@@ -64,12 +66,12 @@ export class SupervisionService {
     });
   }
 
-  async validarCodigo(codigoAcceso: string) {
+  async validarCodigo(codigoAcceso: string, organizacionId?: string) {
     const q = await this.prisma.questionnaire.findUnique({
       where: { codigoAcceso },
     });
 
-    if (!q || !q.activo) {
+    if (!q || !q.activo || (organizacionId && q.organizationId !== organizacionId)) {
       throw new NotFoundException('Cuestionario no encontrado o inactivo.');
     }
 
@@ -93,7 +95,7 @@ export class SupervisionService {
     let tipo = dto.tipo || 'EXAMEN';
 
     if (dto.codigoAcceso && dto.codigoAcceso !== 'TELETRABAJO') {
-      const q = await this.validarCodigo(dto.codigoAcceso);
+      const q = await this.validarCodigo(dto.codigoAcceso, organizacionId);
       questionnaireId = q.id;
       tipo = q.tipo;
     }
@@ -126,6 +128,7 @@ export class SupervisionService {
         duracionMinutos: sesion.questionnaire?.duracionMinutos || 60,
       },
     });
+    await this.gateway.vincularSesion(sesion.id, userId);
 
     return {
       id: sesion.id,
@@ -162,6 +165,7 @@ export class SupervisionService {
       where: { id: sessionId },
       data: { totalIncidentes: { increment: 1 } },
     });
+    this.gateway.registrarTelemetria(sessionId, sesion.organizationId, evento.tipo, dto.detalles || {});
 
     return { registrado: true, eventoId: evento.id, tipo: evento.tipo };
   }
@@ -236,7 +240,7 @@ export class SupervisionService {
       score = Math.max(0, 100 - penalizacion);
     }
 
-    return this.prisma.supervisionSession.update({
+    const finalizada = await this.prisma.supervisionSession.update({
       where: { id: sessionId },
       data: {
         estado: 'FINALIZADA',
@@ -247,6 +251,8 @@ export class SupervisionService {
         tiempoFueraSeg: dto.tiempoFueraSeg || 0,
       },
     });
+    this.gateway.finalizarSesion(sessionId);
+    return finalizada;
   }
 
   async obtenerSesion(sessionId: string, userId: string) {

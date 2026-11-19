@@ -24,6 +24,20 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
   const animFrameRef = useRef<number | null>(null);
   const ultimoProcesoRef = useRef<number>(0);
   const inicioAusenciaRef = useRef<number | null>(null);
+  const onCambioRef = useRef(onCambioEstadoPresencia);
+  const ultimoEstadoNotificadoRef = useRef<EstadoPresencia | null>(null);
+
+  useEffect(() => {
+    onCambioRef.current = onCambioEstadoPresencia;
+  }, [onCambioEstadoPresencia]);
+
+  const notificarEstado = useCallback((nuevoEstado: EstadoPresencia) => {
+    setEstado((prev) => (prev === nuevoEstado ? prev : nuevoEstado));
+    if (ultimoEstadoNotificadoRef.current !== nuevoEstado) {
+      ultimoEstadoNotificadoRef.current = nuevoEstado;
+      onCambioRef.current(nuevoEstado);
+    }
+  }, []);
 
   // Iniciar / detener cámara según descanso
   useEffect(() => {
@@ -35,8 +49,7 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
         streamRef.current = null;
       }
       setCamaraLista(false);
-      setEstado('REPOSO');
-      onCambioEstadoPresencia('REPOSO');
+      notificarEstado('REPOSO');
       return;
     }
 
@@ -72,7 +85,7 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
         streamRef.current = null;
       }
     };
-  }, [enDescanso, onCambioEstadoPresencia]);
+  }, [enDescanso, notificarEstado]);
 
   // Manejo de eventos Picture-in-Picture
   useEffect(() => {
@@ -123,13 +136,11 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
 
             if (caras.length === 1) {
               inicioAusenciaRef.current = null;
-              setEstado('PRESENTE');
-              onCambioEstadoPresencia('PRESENTE');
+              notificarEstado('PRESENTE');
               if (canvas && !modoDiscreto) dibujarCaja(canvas, caras[0], '#10B981');
             } else if (caras.length >= 2) {
               inicioAusenciaRef.current = null;
-              setEstado('MULTIPLE');
-              onCambioEstadoPresencia('MULTIPLE');
+              notificarEstado('MULTIPLE');
               if (canvas && !modoDiscreto) dibujarCaja(canvas, caras[0], '#F59E0B');
             } else {
               if (canvas) limpiarCanvas(canvas);
@@ -138,8 +149,7 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
               }
               const transcurrido = Date.now() - inicioAusenciaRef.current;
               if (transcurrido >= 10000) {
-                setEstado('AUSENTE');
-                onCambioEstadoPresencia('AUSENTE');
+                notificarEstado('AUSENTE');
               }
             }
           }
@@ -157,7 +167,7 @@ export const VisorPresenciaTeletrabajo: React.FC<Props> = ({
       activo = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [enDescanso, modoDiscreto, onCambioEstadoPresencia]);
+  }, [enDescanso, modoDiscreto, notificarEstado]);
 
   const dibujarCaja = (canvas: HTMLCanvasElement, landmarks: { x: number; y: number }[], color: string) => {
     const ctx = canvas.getContext('2d');

@@ -15,6 +15,11 @@ export function useTelemetriaNavegador({
   const [enPantallaCompleta, setEnPantallaCompleta] = useState(false);
   const [focoPerdido, setFocoPerdido] = useState(false);
   const tiempoSalidaRef = useRef<number | null>(null);
+  const onEventoRef = useRef(onEventoDetectado);
+
+  useEffect(() => {
+    onEventoRef.current = onEventoDetectado;
+  }, [onEventoDetectado]);
 
   const solicitarPantallaCompleta = useCallback(async () => {
     try {
@@ -34,7 +39,7 @@ export function useTelemetriaNavegador({
     const handleBlur = () => {
       setFocoPerdido(true);
       tiempoSalidaRef.current = Date.now();
-      onEventoDetectado('WINDOW_BLUR', 0, { timestamp: new Date().toISOString() });
+      onEventoRef.current('WINDOW_BLUR', 0, { timestamp: new Date().toISOString() });
     };
 
     const handleFocus = () => {
@@ -42,7 +47,7 @@ export function useTelemetriaNavegador({
       if (tiempoSalidaRef.current) {
         const duracionMs = Date.now() - tiempoSalidaRef.current;
         tiempoSalidaRef.current = null;
-        onEventoDetectado('WINDOW_FOCUS', duracionMs, { duracionMs });
+        onEventoRef.current('WINDOW_FOCUS', duracionMs, { duracionMs });
       }
     };
 
@@ -59,7 +64,7 @@ export function useTelemetriaNavegador({
       const isFull = !!document.fullscreenElement;
       setEnPantallaCompleta(isFull);
       if (!isFull && exigirPantallaCompleta) {
-        onEventoDetectado('FULLSCREEN_EXIT', 0, { salida: true });
+        onEventoRef.current('FULLSCREEN_EXIT', 0, { salida: true });
       }
     };
 
@@ -78,13 +83,13 @@ export function useTelemetriaNavegador({
       if (atajoProhibido) {
         e.preventDefault();
         e.stopPropagation();
-        onEventoDetectado('SHORTCUT_BLOCKED', 0, { atajo: e.key, ctrl: esCtrl });
+        onEventoRef.current('SHORTCUT_BLOCKED', 0, { atajo: e.key, ctrl: esCtrl });
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      onEventoDetectado('SHORTCUT_BLOCKED', 0, { accion: 'CLIC_DERECHO' });
+      onEventoRef.current('SHORTCUT_BLOCKED', 0, { accion: 'CLIC_DERECHO' });
     };
 
     window.addEventListener('blur', handleBlur);
@@ -102,7 +107,7 @@ export function useTelemetriaNavegador({
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [habilitado, exigirPantallaCompleta, onEventoDetectado]);
+  }, [habilitado, exigirPantallaCompleta]);
 
   return {
     enPantallaCompleta,

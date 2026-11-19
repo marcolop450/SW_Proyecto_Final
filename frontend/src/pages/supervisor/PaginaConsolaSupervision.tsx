@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ConsolaMosaicoSemaforo } from '../../features/supervision/components/ConsolaMosaicoSemaforo';
 import { LineaTiempoIncidentes } from '../../features/supervision/components/LineaTiempoIncidentes';
+import { SelectorSesiones } from '../../features/supervision/components/SelectorSesiones';
 import { api } from '../../api/client';
 
 interface SesionResumen {
@@ -25,6 +26,7 @@ interface SesionResumen {
   tipo: string;
   estado: string;
   inicio: string;
+  questionnaire?: { titulo: string } | null;
   usuario?: {
     nombre: string;
     apellido: string;
@@ -48,6 +50,8 @@ export const PaginaConsolaSupervision: React.FC = () => {
   const [descargandoExcel, setDescargandoExcel] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [revisionIncidentes, setRevisionIncidentes] = useState(0);
 
   const cargarSesiones = async () => {
     try {
@@ -70,15 +74,17 @@ export const PaginaConsolaSupervision: React.FC = () => {
     if (!sid) return;
     setCorrelacionando(true);
     setMensajeExito(null);
+    setError(null);
     try {
       const resCorrelacion = await api.post(`/supervision/correlacion/${sid}`);
       const resIndices = await api.get(`/supervision/indices/${sid}`);
       setIndices(resIndices.data);
+      setRevisionIncidentes((n) => n + 1);
       setMensajeExito(
-        `Motor de correlación ejecutado con éxito: ${resCorrelacion.data.total} incidentes correlacionados mediante ventanas deslizantes.`,
+        `Revisión terminada: hay ${resCorrelacion.data.total} situaciones registradas en esta sesión.`,
       );
     } catch {
-      // Ignorar
+      setError('No se pudieron revisar los eventos. Comprueba la conexión y vuelve a intentarlo.');
     } finally {
       setCorrelacionando(false);
     }
@@ -87,6 +93,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
   const generarSesionDemo = async () => {
     setGenerandoDemo(true);
     setMensajeExito(null);
+    setError(null);
     try {
       const res = await api.post('/supervision/sesiones/demo');
       const nuevaId = res.data.sessionId;
@@ -150,27 +157,33 @@ export const PaginaConsolaSupervision: React.FC = () => {
     if (!sessionIdAuditoria) return;
     setCerrandoSesion(true);
     setMensajeExito(null);
+    setError(null);
     try {
       const res = await api.post(`/supervision/sesiones/${sessionIdAuditoria}/cerrar`);
       setIndices(res.data.indices);
       setMensajeExito(
-        `Sesión cerrada formalmente. Índice de Integridad persistido: ${res.data.indices.indiceIntegridad}/100.`,
+        `Sesión cerrada formalmente. Integridad persistido: ${res.data.indices.indiceIntegridad}/100.`,
       );
       await cargarSesiones();
     } catch {
-      // Ignorar error
+      setError('No se pudo cerrar la sesión. Vuelve a intentarlo.');
     } finally {
       setCerrandoSesion(false);
     }
   };
 
   useEffect(() => {
+    let vigente = true;
+    setIndices(null);
+    setMensajeExito(null);
+    setError(null);
     if (sessionIdAuditoria) {
       api
         .get(`/supervision/indices/${sessionIdAuditoria}`)
-        .then((res) => setIndices(res.data))
-        .catch(() => setIndices(null));
+        .then((res) => { if (vigente) setIndices(res.data); })
+        .catch(() => { if (vigente) setError('No se pudieron cargar los resultados de esta sesión.'); });
     }
+    return () => { vigente = false; };
   }, [sessionIdAuditoria]);
 
   const sesionActual = sesiones.find((s) => s.id === sessionIdAuditoria);
@@ -223,10 +236,10 @@ export const PaginaConsolaSupervision: React.FC = () => {
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>Análisis y Correlación Forense</span>
+          <span>Revisión de sesión</span>
           {sessionIdAuditoria && (
             <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
-              Sesión activa
+              {sesionActual?.estado === 'EN_PROGRESO' ? 'Sesión activa' : 'Sesión seleccionada'}
             </span>
           )}
         </button>
@@ -247,6 +260,9 @@ export const PaginaConsolaSupervision: React.FC = () => {
           <ConsolaMosaicoSemaforo
             onSeleccionarSesion={(sid) => {
               setSessionIdAuditoria(sid);
+              setMensajeExito(null);
+              setError(null);
+              void cargarSesiones();
               setPestañaActiva('forense');
             }}
             sesionSeleccionadaId={sessionIdAuditoria}
@@ -282,15 +298,16 @@ export const PaginaConsolaSupervision: React.FC = () => {
                     {sesionActual?.estado && (
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
-                          sesionActual.estado === 'COMPLETADA'
+                          sesionActual.estado !== 'EN_PROGRESO'
                             ? 'bg-slate-100 text-slate-600 border border-slate-200'
                             : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         }`}
                       >
-                        {sesionActual.estado}
+                        {sesionActual.estado === 'EN_PROGRESO' ? 'En curso' : ['FINALIZADA', 'COMPLETADA'].includes(sesionActual.estado) ? 'Finalizada' : sesionActual.estado}
                       </span>
                     )}
                   </div>
+                  {sesionActual && <p className="mt-1 text-xs font-medium text-slate-600">{sesionActual.questionnaire?.titulo || (sesionActual.tipo === 'EXAMEN' ? 'Examen sin nombre' : sesionActual.tipo === 'TELETRABAJO' ? 'Teletrabajo' : sesionActual.tipo)}</p>}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-mono mt-1">
                     {sesionActual?.inicio && (
                       <span className="flex items-center gap-1">
@@ -309,18 +326,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
 
               {/* Selector y Botones de Acción */}
               <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
-                <select
-                  value={sessionIdAuditoria}
-                  onChange={(e) => setSessionIdAuditoria(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 focus:outline-none focus:border-emerald-500 focus:bg-white min-w-[200px] cursor-pointer"
-                >
-                  <option value="">Seleccione una sesión...</option>
-                  {sesiones.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.usuario ? `${s.usuario.nombre} (${s.tipo})` : `Sesión ${s.id.slice(0, 8)}`} — {new Date(s.inicio).toLocaleTimeString()}
-                    </option>
-                  ))}
-                </select>
+                <SelectorSesiones sesiones={sesiones} seleccionada={sessionIdAuditoria} deshabilitado={correlacionando || cerrandoSesion} onSeleccionar={setSessionIdAuditoria} />
 
                 <button
                   onClick={() => cargarSesiones()}
@@ -336,17 +342,17 @@ export const PaginaConsolaSupervision: React.FC = () => {
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-2xs disabled:opacity-40 cursor-pointer"
                 >
                   <PlayCircle className={`w-3.5 h-3.5 ${correlacionando ? 'animate-spin' : ''}`} />
-                  <span>{correlacionando ? 'Evaluando...' : 'Ejecutar Correlación'}</span>
+                  <span>{correlacionando ? 'Revisando...' : 'Revisar eventos'}</span>
                 </button>
 
                 <button
                   onClick={() => cerrarSesionActual()}
-                  disabled={cerrandoSesion || !sessionIdAuditoria.trim()}
+                  disabled={cerrandoSesion || !sessionIdAuditoria.trim() || sesionActual?.estado !== 'EN_PROGRESO'}
                   className="px-3.5 py-2 rounded-xl bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs disabled:opacity-40 cursor-pointer"
-                  title="Cierra formalmente la sesión y persiste los índices sintéticos de integridad y bienestar"
+                  title="Finaliza la sesión seleccionada"
                 >
                   <CheckCircle className={`w-3.5 h-3.5 text-emerald-600 ${cerrandoSesion ? 'animate-spin' : ''}`} />
-                  <span>{cerrandoSesion ? 'Cerrando...' : 'Cerrar Sesión'}</span>
+                  <span>{cerrandoSesion ? 'Cerrando...' : 'Finalizar sesión'}</span>
                 </button>
               </div>
             </div>
@@ -358,10 +364,14 @@ export const PaginaConsolaSupervision: React.FC = () => {
                 <span>{mensajeExito}</span>
               </div>
             )}
+            {error && <p role="alert" className="mt-4 text-xs text-rose-700">{error}</p>}
           </div>
 
-          {/* Tarjetas de Métricas e Índices Sintéticos con Semáforo Dinámico */}
-          {indices && (
+          <p className="text-sm text-slate-600">Selecciona una sesión y pulsa «Revisar eventos» para buscar situaciones que necesiten atención. Después puedes revisar cada resultado y registrar tu decisión.</p>
+          {sesionActual && <p className="text-xs text-slate-500">Los resultados corresponden a la sesión de {sesionActual.usuario ? `${sesionActual.usuario.nombre} ${sesionActual.usuario.apellido}` : 'esta persona'}, iniciada el {new Date(sesionActual.inicio).toLocaleString()}.</p>}
+
+          {/* Tarjetas de resultados */}
+          {indices && indices.sessionId === sessionIdAuditoria && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex items-center gap-3.5">
                 <div
@@ -376,7 +386,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block uppercase font-mono font-semibold">Índice de Integridad</span>
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono font-semibold">Integridad</span>
                   <span
                     className={`font-mono font-bold text-lg leading-tight ${
                       indices.indiceIntegridad >= 80
@@ -404,7 +414,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
                   <Activity className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block uppercase font-mono font-semibold">Bienestar Ergonómico</span>
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono font-semibold">Bienestar</span>
                   <span
                     className={`font-mono font-bold text-lg leading-tight ${
                       indices.indiceBienestar >= 80
@@ -434,7 +444,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 block uppercase font-mono font-semibold">
-                      Clasificación SST ({indices.totalIncidentes} incidentes)
+                      Estado de bienestar ({indices.totalIncidentes} incidentes)
                     </span>
                     <span
                       className={`font-mono text-sm font-bold block ${
@@ -466,6 +476,7 @@ export const PaginaConsolaSupervision: React.FC = () => {
           {sessionIdAuditoria.trim() && (
             <div className="rounded-2xl bg-white border border-slate-200/90 p-5 shadow-xs">
               <LineaTiempoIncidentes
+                key={`${sessionIdAuditoria}-${revisionIncidentes}`}
                 sessionId={sessionIdAuditoria.trim()}
                 onIncidenteAuditado={() => {
                   api

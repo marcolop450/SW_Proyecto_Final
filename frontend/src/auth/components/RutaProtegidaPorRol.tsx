@@ -9,6 +9,7 @@ export const obtenerRutaPorDefecto = (rol?: string): string => {
     case 'EMPLEADO':
       return '/mi-ergonomia';
     case 'SUPERVISOR':
+    case 'EVALUADOR':
       return '/dashboard';
     case 'ADMIN_ORGANIZACION':
     case 'SUPER_ADMINISTRADOR':

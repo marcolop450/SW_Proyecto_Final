@@ -11,12 +11,15 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ConsentGuard } from '../../common/guards/consent.guard';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Rol } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 import { MotorCorrelacionService } from './services/motor-correlacion.service';
@@ -48,23 +51,33 @@ export class SupervisionSp4Controller {
     private readonly gateway: SupervisionGateway,
   ) {}
 
+  private async verificarSesion(sessionId: string, user: AuthenticatedUser) {
+    if (!['SUPERVISOR', 'EVALUADOR', 'ADMIN_ORGANIZACION', 'SUPER_ADMINISTRADOR'].includes(user.rol)) throw new ForbiddenException();
+    const sesion = await this.prisma.supervisionSession.findFirst({ where: { id: sessionId, organizationId: user.organizationId } });
+    if (!sesion) throw new NotFoundException('Sesión no encontrada');
+    return sesion;
+  }
+
   @Get('puestos-en-vivo')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU21 – Consultar puestos de monitoreo en tiempo real' })
-  async listarPuestosEnVivo() {
-    const puestos = this.gateway.obtenerPuestos();
+  async listarPuestosEnVivo(@CurrentUser() user: AuthenticatedUser) {
+    const puestos = this.gateway.obtenerPuestos(user.organizationId);
     if (puestos.length === 0) {
-      return this.gateway.cargarSesionesDesdeBaseDatos();
+      return this.gateway.cargarSesionesDesdeBaseDatos(user.organizationId);
     }
     return puestos;
   }
 
   @Post('puestos-en-vivo/simular')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU21 – Simular 5 puestos en tiempo real para verificar el semáforo y watchdog' })
-  async simularPuestosEnVivo() {
-    return this.gateway.simularPuestosDemo();
+  async simularPuestosEnVivo(@CurrentUser() user: AuthenticatedUser) {
+    return this.gateway.simularPuestosDemo(user.organizationId);
   }
 
   @Get('sesiones')
+  @Roles(Rol.SUPERVISOR, Rol.EVALUADOR, Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU20/CU21 – Listar sesiones de supervisión de la organización' })
   async listarSesiones(@CurrentUser() user: AuthenticatedUser) {
     return this.prisma.supervisionSession.findMany({
@@ -72,9 +85,9 @@ export class SupervisionSp4Controller {
         organizationId: user.organizationId,
       },
       orderBy: { inicio: 'desc' },
-      take: 20,
       include: {
         usuario: { select: { id: true, nombre: true, apellido: true, correo: true } },
+        questionnaire: { select: { titulo: true } },
         _count: { select: { eventosConducta: true, incidentes: true } },
       },
     });
@@ -153,6 +166,7 @@ export class SupervisionSp4Controller {
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.verificarSesion(sessionId, user);
     const incidentes = await this.correlacion.evaluarVentanaDeslizante(sessionId);
 
     await this.bitacora.registrar({
@@ -173,6 +187,7 @@ export class SupervisionSp4Controller {
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.verificarSesion(sessionId, user);
     const incidentes = await this.correlacion.obtenerIncidentes(sessionId);
 
     await this.bitacora.registrar({
@@ -194,6 +209,9 @@ export class SupervisionSp4Controller {
     @Body() dto: AuditarIncidenteDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    const incidente = await this.prisma.incident.findUnique({ where: { id: incidentId } });
+    if (!incidente) throw new NotFoundException('Incidente no encontrado');
+    await this.verificarSesion(incidente.sessionId, user);
     const estadoNormalizado = dto.estado === 'VALIDADO' ? 'CONFIRMADO' : dto.estado;
     const resultado = await this.correlacion.auditarIncidente(
       incidentId,
@@ -216,7 +234,8 @@ export class SupervisionSp4Controller {
 
   @Get('indices/:sessionId')
   @ApiOperation({ summary: 'CU23 – Obtener índices sintéticos de Integridad y Bienestar Ergonómico' })
-  async obtenerIndices(@Param('sessionId') sessionId: string) {
+  async obtenerIndices(@Param('sessionId') sessionId: string, @CurrentUser() user: AuthenticatedUser) {
+    await this.verificarSesion(sessionId, user);
     return this.correlacion.calcularIndices(sessionId);
   }
 
@@ -226,6 +245,7 @@ export class SupervisionSp4Controller {
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.verificarSesion(sessionId, user);
     const indices = await this.correlacion.calcularIndices(sessionId);
     const sesion = await this.prisma.supervisionSession.update({
       where: { id: sessionId },
@@ -235,6 +255,7 @@ export class SupervisionSp4Controller {
         scoreIntegridad: indices.indiceIntegridad,
       },
     });
+    this.gateway.finalizarSesion(sessionId);
 
     await this.bitacora.registrar({
       userId: user.id,
@@ -249,6 +270,8 @@ export class SupervisionSp4Controller {
       },
     });
 
+    this.gateway.notificarCierreSesion(sessionId);
+
     return {
       mensaje: 'Sesión cerrada exitosamente e índices sintéticos calculados',
       sesion,
@@ -261,11 +284,14 @@ export class SupervisionSp4Controller {
   async descargarReporteExcel(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Query('eventos') incluirEventos: string,
+    @Query('referencia') incluirReferencia: string,
     @Res() res: Response,
   ) {
+    await this.verificarSesion(sessionId, user);
     const session = await this.prisma.supervisionSession.findUnique({
       where: { id: sessionId },
-      include: { usuario: true, organizacion: true, eventosConducta: true, incidentes: true },
+      include: { usuario: true, organizacion: true, questionnaire: true, eventosConducta: { orderBy: { timestamp: 'asc' } }, incidentes: true },
     });
     if (!session) throw new NotFoundException('Sesión de supervisión no encontrada');
 
@@ -280,11 +306,8 @@ export class SupervisionSp4Controller {
       (e) => e.tipo === 'POSTURA_FORZADA' || (e.detalles as any)?.rulaScore,
     );
 
-    let promedioRula = 2.8;
-    if (evsErgonomicos.length > 0) {
-      const sum = evsErgonomicos.reduce((acc, e) => acc + Number((e.detalles as any)?.rulaScore || 3.5), 0);
-      promedioRula = sum / evsErgonomicos.length;
-    }
+    const valoresRula = evsErgonomicos.map(e => (e.detalles as any)?.rulaScore).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 7);
+    const promedioRula = valoresRula.length ? Math.round(valoresRula.reduce((a, b) => a + b, 0) / valoresRula.length * 100) / 100 : null;
 
     const indices = await this.correlacion.calcularIndices(sessionId);
 
@@ -293,6 +316,14 @@ export class SupervisionSp4Controller {
       organizacion: session.organizacion?.nombre,
       evaluado: session.usuario ? `${session.usuario.nombre} ${session.usuario.apellido}` : 'Evaluado',
       correo: session.usuario?.correo,
+      titulo: session.questionnaire?.titulo || session.tipo,
+      estado: session.estado,
+      inicio: new Date(session.inicio).toLocaleString('es-BO', { timeZone: 'America/La_Paz' }),
+      fin: session.fin ? new Date(session.fin).toLocaleString('es-BO', { timeZone: 'America/La_Paz' }) : null,
+      generado: new Date().toLocaleString('es-BO', { timeZone: 'America/La_Paz' }),
+      formatearFecha: (valor: Date) => new Date(valor).toLocaleString('es-BO', { timeZone: 'America/La_Paz' }),
+      incluirEventos: incluirEventos !== 'false',
+      incluirReferencia: incluirReferencia !== 'false',
       minutosTotales,
       totalAlertas: evsErgonomicos.length > 0 ? evsErgonomicos.length : session.incidentes?.length || 0,
       promedioRula,
@@ -309,7 +340,7 @@ export class SupervisionSp4Controller {
       categoria: 'ACCESOS_DATOS',
       details: {
         minutosTotales,
-        promedioRula: promedioRula.toFixed(1),
+        promedioRula,
         scoreBienestar: indices.indiceBienestar,
       },
     });
@@ -324,13 +355,17 @@ export class SupervisionSp4Controller {
   async descargarReportePdf(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Query('incidentes') incluirIncidentes: string,
+    @Query('eventos') incluirEventos: string,
     @Res() res: Response,
   ) {
+    await this.verificarSesion(sessionId, user);
     const session = await this.prisma.supervisionSession.findUnique({
       where: { id: sessionId },
       include: {
         usuario: true,
         organizacion: true,
+        questionnaire: true,
         incidentes: { orderBy: { timestamp: 'asc' } },
         eventosConducta: { orderBy: { timestamp: 'asc' } },
         respuestasControl: { include: { pregunta: true } },
@@ -338,7 +373,7 @@ export class SupervisionSp4Controller {
     });
     if (!session) throw new NotFoundException('Sesión de supervisión no encontrada');
 
-    const buffer = await this.reportes.generarReporteForensePdf(session);
+    const buffer = await this.reportes.generarReporteForensePdf({ ...session, incluirIncidentes: incluirIncidentes !== 'false', incluirEventos: incluirEventos === 'true' });
 
     // Registrar auditoría de descarga en bitácora WORM (CU26 / RF50: Accesos a datos)
     await this.bitacora.registrar({
@@ -360,6 +395,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Consultar bitácora WORM inmutable con filtros avanzados' })
   async consultarBitacora(
     @Query('categoria') categoria?: string,
@@ -383,12 +419,14 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/estadisticas')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Estadísticas y métricas de la bitácora WORM' })
   async obtenerEstadisticas() {
     return this.bitacora.obtenerEstadisticas();
   }
 
   @Get('bitacora/verificar')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Verificar matemáticamente la integridad de la cadena SHA-256' })
   async verificarCadena(@CurrentUser() user: AuthenticatedUser) {
     const verificacion = await this.bitacora.verificarIntegridadCadena();
@@ -408,6 +446,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar-excel')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM a hoja de cálculo Excel (.xlsx) estructurada' })
   async exportarExcel(
     @CurrentUser() user: AuthenticatedUser,
@@ -435,6 +474,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM a CSV' })
   async exportarCsv(
     @CurrentUser() user: AuthenticatedUser,
@@ -459,6 +499,7 @@ export class SupervisionSp4Controller {
   }
 
   @Get('bitacora/exportar-json')
+  @Roles(Rol.ADMIN_ORGANIZACION, Rol.SUPER_ADMINISTRADOR)
   @ApiOperation({ summary: 'CU26 – Exportar registros WORM con metadata criptográfica a JSON' })
   async exportarJson(
     @CurrentUser() user: AuthenticatedUser,

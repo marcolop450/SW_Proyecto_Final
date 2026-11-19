@@ -5,5 +5,8 @@ export function obtenerSecretoJwt(config: ConfigService): string {
   if (!secreto?.trim()) {
     throw new Error('JWT_SECRET debe configurarse antes de iniciar la API.');
   }
+  if (config.get<string>('NODE_ENV') === 'production' && secreto.trim().length < 32) {
+    throw new Error('JWT_SECRET debe contener al menos 32 caracteres en producción.');
+  }
   return secreto;
 }
