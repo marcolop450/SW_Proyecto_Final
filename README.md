@@ -4,6 +4,8 @@
 
 El [plan de despliegue en AWS](docs/PLAN_DESPLIEGUE_AWS.md) registra las tareas verificadas, los pendientes y las instrucciones para continuar el trabajo en equipo.
 
+La [guía de entrega](docs/GUIA_ENTREGA_DESPLIEGUE.md) explica cómo arrancar desde un clon limpio y recuperar una versión. La [propuesta de AWS](docs/PLAN_INFRAESTRUCTURA_AWS.md) recoge el coste y los pasos de la demo.
+
 ---
 
 ## 🌟 Características Principales

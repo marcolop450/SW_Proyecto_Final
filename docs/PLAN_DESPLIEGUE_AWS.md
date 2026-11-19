@@ -9,8 +9,8 @@ Proyecto ErgoCheck AI. Estado revisado el 19 de noviembre de 2026.
 - Bloque B implementado, verificado en Windows y Docker y publicado en `main`.
 - Bloque C implementado, verificado con Caddy y publicado en `main`.
 - Bloque D verificado localmente y publicado en `main` con la corrección del portal del postulante.
-- Siguiente bloque **E · Entrega y publicación posterior**.
-- El servicio AWS y el dominio público se elegirán después de verificar la preparación local.
+- Bloque E documentado y publicado en `main`, con evidencia de arranque desde un clon limpio. Quedan pendientes la revisión por otro integrante y el acuerdo sobre la demo.
+- AWS propuesto para la demo **Lightsail de 2 GB en Oregón**, sujeto a créditos, subdominio y responsables confirmados.
 
 ## Cómo mantener este documento
 
@@ -168,13 +168,18 @@ La revisión de `45b22dd` reconstruyó ambas imágenes junto con el bloque D. Pa
 
 ## Bloque E · Entrega y publicación posterior
 
-- [ ] Completar la guía de configuración, construcción, arranque, registros, salud, parada y recuperación.
-- [ ] Registrar los commits de cada bloque y los problemas abiertos.
+- [x] Completar la [guía de configuración, construcción, arranque, registros, salud, parada y recuperación](GUIA_ENTREGA_DESPLIEGUE.md).
+- [x] Registrar los commits de cada bloque y los problemas abiertos.
+- [x] Repetir el arranque desde una copia limpia de GitHub en el entorno de verificación.
 - [ ] Comprobar que otro integrante puede reproducir el arranque siguiendo la guía.
-- [ ] Planificar con el equipo el servicio AWS, su tamaño, dominio, presupuesto de créditos y accesos necesarios.
+- [x] Preparar la [propuesta de AWS con tamaño, coste, DNS y accesos](PLAN_INFRAESTRUCTURA_AWS.md).
+- [ ] Acordar con el equipo el paquete, el subdominio, los responsables y el presupuesto de la demo.
+- [x] Publicar los documentos del bloque E en `main` con el commit `docs(deploy): preparar entrega y propuesta de AWS`.
 
-AWS es obligatorio para el proyecto y se prioriza aprovechar los beneficios gratuitos de la cuenta. El saldo y el periodo disponible se volverán a consultar antes de elegir recursos. La instancia case-platform-server pertenece a otro proyecto y requiere evaluar su carga y almacenamiento antes de decidir su aprovechamiento.
+El 19 de noviembre de 2026 se clonó `main` desde GitHub en una carpeta vacía, se construyeron las imágenes `linux/amd64` del commit `c6f62f4` y se inició con Docker 29.9.3 y Compose 5.7.0. Las rutas `live`, `ready` y `/mi-ergonomia` devolvieron 200 por HTTPS con la CA local de Caddy. La API volvió a estar disponible tras `stop` y `up`. En reposo, los tres contenedores sumaron unos 130 MiB en Docker Desktop. Es una medida local y la carga de AWS se verificará en la VM. La exportación e importación local de ambas imágenes conservó sus identificadores y el archivo de transferencia ocupó unos 196 MB.
+
+La consola de facturación mostró el plan gratuito activo y Lightsail y EC2 como servicios cubiertos por el crédito. El saldo y el vencimiento se volverán a consultar antes de crear recursos. La instancia `case-platform-server` sigue asignada a su otro proyecto.
 
 Las credenciales se conservan en archivos privados o en el entorno. Este documento contiene los nombres de las variables y los procedimientos para obtenerlas.
 
-La preparación se considerará terminada cuando el conjunto funcione localmente con Docker y HTTPS, sus verificaciones estén registradas y otro integrante pueda reproducir el arranque.
+La reproducción externa al entorno de verificación queda abierta hasta que otro integrante registre sus resultados. Los pasos para crear la VM y comprobar la URL pública están en la propuesta de AWS.
